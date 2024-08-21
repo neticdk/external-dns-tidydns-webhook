@@ -84,4 +84,5 @@ go build cmd/webhook/
 - It's not clear what kind of response is expected on the  POST /records
   request. Currently a list with records is returned (see TODO)
 - Needs some unit tests
+- Add GitHub actions
 - Set timezone at upstart (runtime)
