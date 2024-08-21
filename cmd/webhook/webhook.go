@@ -1,0 +1,163 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+
+	"sigs.k8s.io/external-dns/endpoint"
+	"sigs.k8s.io/external-dns/plan"
+	"sigs.k8s.io/external-dns/provider"
+)
+
+type webhook interface {
+	negociate(w http.ResponseWriter, req *http.Request)
+	getRecords(w http.ResponseWriter, req *http.Request)
+	adjustEndpoints(w http.ResponseWriter, req *http.Request)
+	applyChanges(w http.ResponseWriter, req *http.Request)
+}
+
+type tidyWebhook struct {
+	provider provider.Provider
+}
+
+const (
+	headerKey   = "Content-Type"
+	headerValue = "application/external.dns.webhook+json;version=1"
+)
+
+func newWebhook(p provider.Provider) webhook {
+	return &tidyWebhook{p}
+}
+
+// Return list of domainfilters
+func (wh *tidyWebhook) negociate(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set(headerKey, headerValue)
+
+	// Encode response
+	resp, err := wh.provider.GetDomainFilter().MarshalJSON()
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(resp)
+}
+
+// Return list of all records using the External-DNS Endpoint list format
+func (wh *tidyWebhook) getRecords(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set(headerKey, headerValue)
+
+	// Get all tidy endpoints
+	endpoints, err := wh.provider.Records(context.Background())
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+
+	// encode response
+	resp, err := json.Marshal(endpoints)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(resp)
+}
+
+// Recieve a list of proposed endpoints, including endpoints that will later be
+// filtered out by the domainfilter, and modify them so they are consumable to
+// TidyDNS before returning them. This is to inform External-DNS how the records
+// will look when saved so they can be checked for correctness.
+func (wh *tidyWebhook) adjustEndpoints(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set(headerKey, headerValue)
+
+	// Read request
+	msg, err := io.ReadAll(req.Body)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Map request body to endpoint list
+	endpoints := []*endpoint.Endpoint{}
+	if err = json.Unmarshal(msg, &endpoints); err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Process request
+	adjustedEndpoints, err := wh.provider.AdjustEndpoints(endpoints)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// encode response
+	resp, err := json.Marshal(adjustedEndpoints)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(resp)
+}
+
+// Consume a struct with 4 lists. Endpoints to create and delete, and a 2 lists
+// representing changes to endpoints. The two changes lists are of equal length
+// and represent the before and after spec of each endpoint to be changed.
+func (wh *tidyWebhook) applyChanges(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set(headerKey, headerValue)
+
+	// Read request
+	msg, err := io.ReadAll(req.Body)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Map request body to endpoint list
+	changes := &plan.Changes{}
+	if err = json.Unmarshal(msg, changes); err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Process request
+	err = wh.provider.ApplyChanges(context.Background(), changes)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// TODO: We might not need to return the list of endpoints here. This should
+	// be testet.
+
+	// Get all tidy endpoints
+	endpoints, err := wh.provider.Records(context.Background())
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+
+	// encode response
+	resp, err := json.Marshal(endpoints)
+	if err != nil {
+		slog.Error(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(resp)
+}
