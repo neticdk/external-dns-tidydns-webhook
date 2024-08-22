@@ -79,7 +79,6 @@ go build cmd/webhook/
 ## Known Issues and Limitations
 
 - So far the record types are A, AAAA and CNAME
-- Metrics not yet supported (see TODO)
 - Needs some unit tests
 - Add GitHub actions
 - Set timezone at upstart (runtime)
