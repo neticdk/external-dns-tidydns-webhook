@@ -78,13 +78,8 @@ go build cmd/webhook/
 
 ## Known Issues and Limitations
 
-- Some times External-DNS initally fails after trying to reconcile new records
-  with the wekhook. Upon restart it will say that everything is up to date. This
-  is likely an communication issue with the webhook
 - So far the record types are A, AAAA and CNAME
 - Metrics not yet supported (see TODO)
-- It's not clear what kind of response is expected on the  POST /records
-  request. Currently a list with records is returned (see TODO)
 - Needs some unit tests
 - Add GitHub actions
 - Set timezone at upstart (runtime)

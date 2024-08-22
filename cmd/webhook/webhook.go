@@ -141,23 +141,10 @@ func (wh *tidyWebhook) applyChanges(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO: We might not need to return the list of endpoints here. This should
-	// be testet.
-
-	// Get all tidy endpoints
-	endpoints, err := wh.provider.Records(context.Background())
-	if err != nil {
-		slog.Error(err.Error())
-		return
-	}
-
-	// encode response
-	resp, err := json.Marshal(endpoints)
-	if err != nil {
-		slog.Error(err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Write(resp)
+	// The expected return code and content is left undocumented by External-DNS
+	// at this time but
+	// https://github.com/kubernetes-sigs/external-dns/blob/9fb831e97f77b31789df8d837e93f36a6e785562/provider/webhook/webhook.go#L229
+	// reveals that it excepts an empty return with code 204 (no content) when
+	// calling POST /records
+	w.WriteHeader(http.StatusNoContent)
 }
