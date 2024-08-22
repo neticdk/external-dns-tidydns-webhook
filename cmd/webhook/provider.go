@@ -188,18 +188,11 @@ func (p *tidyProvider) parseTidyRecord(record *tidyRecord) *Endpoint {
 	// Convert TTL to TTL type
 	ttl := endpoint.TTL(record.TTL)
 
-	// TXT values from External-DNS are wrapped in "" which Tidy DNS doesn't
-	// support. So when converting back they are re-wrapped.
-	target := record.Destination
-	if record.Type == "TXT" {
-		target = "\"" + target + "\""
-	}
-
 	// Convert description into the ProviderSpec
 	providerSpec := p.descriptionToProviderSpec(record.Description)
 
 	// Create Endpoint
-	endpoint := endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, target)
+	endpoint := endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
 	endpoint.ProviderSpecific = providerSpec
 
 	return endpoint
@@ -242,8 +235,6 @@ func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoin
 func (p *tidyProvider) findRecords(records []tidyRecord, endpoint *Endpoint) []tidyRecord {
 	found := []tidydns.Record{}
 	for _, target := range endpoint.Targets {
-		target = strings.Trim(target, "\"")
-
 		for _, record := range records {
 			dnsName := ""
 			if record.Name == "." {
@@ -275,6 +266,10 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 	description := p.providerSpecToDescription(endpoint.ProviderSpecific)
 
 	for _, target := range endpoint.Targets {
+		// For some reason external-dns wraps the value of certain TXT records
+		// with extra double quotes. This isn't supported by Tidy and it will
+		// refuse to save and removing them seemingly causes no issues for
+		// external-dns when read back.
 		target = strings.Trim(target, "\"")
 
 		newRec := &tidyRecord{
