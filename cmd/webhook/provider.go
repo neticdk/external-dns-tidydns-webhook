@@ -285,10 +285,10 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 			TTL:         ttl,
 		}
 
-		slog.Debug(fmt.Sprintf("create record %+v", newRec))
+		slog.Debug(fmt.Sprintf("create record %+v", *newRec))
 		if err := p.tidy.CreateRecord(zoneID, newRec); err != nil {
 			slog.Warn(err.Error())
-			slog.Debug(fmt.Sprintf("%+v", newRec))
+			slog.Debug(fmt.Sprintf("%+v", *newRec))
 			return
 		}
 	}
