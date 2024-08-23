@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/neticdk/external-dns-tidydns-webhook/cmd/webhook/tidydns"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/sdk/metric"
 )
 
 func main() {
@@ -34,13 +37,27 @@ func main() {
 		}
 	}()
 
+	// Parse the interval deciding how often the zone information is updated
 	zoneUpdateInterval, err := time.ParseDuration(*zoneUpdateIntervalArg)
 	if err != nil {
 		panic(err.Error())
 	}
 
+	// Create a Prometheus reader/exporter
+	prom, err := prometheus.New(prometheus.WithoutScopeInfo())
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// Use the exporter to make a meter for Tidy to attach instrumentation
+	meterProvider := metric.NewMeterProvider(metric.WithReader(prom))
+	tidyMeter := meterProvider.Meter("tidy")
+
 	// Make a Tidy object to abstract calls to Tidy
-	tidy := tidydns.NewTidyDnsClient(*tidyEndpoint, tidyUsername, tidyPassword, (10 * time.Second))
+	tidy, err := tidydns.NewTidyDnsClient(*tidyEndpoint, tidyUsername, tidyPassword, (10 * time.Second), tidyMeter)
+	if err != nil {
+		panic(err.Error())
+	}
 
 	// Make zoneprovider to fetch the zone information with at the set interval
 	zoneProvider := newZoneProvider(tidy, zoneUpdateInterval)
@@ -62,8 +79,10 @@ func main() {
 		}
 	}()
 
+	metricsHandler := promhttp.Handler()
+
 	// Start website to service metrics and health check
-	if err = serveExposed("0.0.0.0:8080"); err != nil {
+	if err = serveExposed("0.0.0.0:8080", metricsHandler); err != nil {
 		panic(err.Error())
 	}
 }

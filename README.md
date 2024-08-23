@@ -21,7 +21,9 @@ The application arguments are as follows:
 - `zone-update-interval` The time-duration between updating the zone information
 - `log-level` Application logging level (debug, info, warn, error)
 
-This application is strictly meant to run in a container as a sidecar to External-DNS inside a Kubernetes environment. Refer to the External-DNS documentaion on how to set it up correctly in this context.
+This application is strictly meant to run in a container as a sidecar to
+External-DNS inside a Kubernetes environment. Refer to the External-DNS
+documentaion on how to set it up correctly in this context.
 
 Locally however the application can be built and run to verify that it can talk
 to Tidy DNS server and applications could be build around it to test the webhook
@@ -51,7 +53,7 @@ export VERSION=1.2.3
 export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
 export PLATFORMS='linux/amd64,linux/arm64'
 export TZ='Europe/Copenhagen'
-docker buildx build --platform=$PLATFORMS --build-arg="TZ=$TZ" -t $REPO_PATH:$VERSION --push .
+docker buildx build --platform=$PLATFORMS --build-arg="TZ=$TZ" --tag $REPO_PATH:$VERSION --push .
 ```
 
 If building for the local platform is sufficient the regular build/push commands
@@ -61,7 +63,7 @@ can be used:
 export VERSION=1.2.3
 export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
 export TZ='Europe/Copenhagen'
-docker build --build-arg="TZ=$TZ" -t $REPO_PATH:$VERSION .
+docker build --build-arg="TZ=$TZ" --tag $REPO_PATH:$VERSION .
 docker push $REPO_PATH:$VERSION
 ```
 
@@ -76,12 +78,7 @@ go build cmd/webhook/
 
 ## Known Issues and Limitations
 
-- Some times External-DNS initally fails after trying to reconcile new records
-  with the wekhook. Upon restart it will say that everything is up to date. This
-  is likely an communication issue with the webhook
-- Supports so far record types A, AAAA and CNAME
-- Metrics not yet supported (see TODO)
-- It's not clear what kind of response is expected on the  POST /records
-  request. Currently a list with records is returned (see TODO)
+- So far the record types are A, AAAA and CNAME
 - Needs some unit tests
+- Add GitHub actions
 - Set timezone at upstart (runtime)

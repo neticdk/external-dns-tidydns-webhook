@@ -3,7 +3,10 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	"runtime/metrics"
 )
+
+type Samples []metrics.Sample
 
 func serveWebhook(wh webhook, addr string) error {
 	slog.Debug("start webhook server on " + addr)
@@ -22,11 +25,11 @@ func serveWebhook(wh webhook, addr string) error {
 	return server.ListenAndServe()
 }
 
-// TODO: metrics endpoints
-func serveExposed(addr string) error {
+func serveExposed(addr string, metricsHandler http.Handler) error {
 	slog.Debug("start webhook server on " + addr)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
+	mux.Handle("GET /metrics", metricsHandler)
 
 	server := http.Server{
 		Addr:    addr,
