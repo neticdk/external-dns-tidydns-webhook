@@ -25,7 +25,7 @@ type Endpoint = endpoint.Endpoint
 type ProviderSpecific = endpoint.ProviderSpecific
 type tidyRecord = tidydns.Record
 
-const annotationKey = "webhook-tidy-description"
+const annotationKey = "webhook/tidy-description"
 
 func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (Provider, error) {
 	return &tidyProvider{
