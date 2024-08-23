@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	otel "go.opentelemetry.io/otel/metric"
 )
 
 type TidyDNSClient interface {
@@ -40,6 +42,7 @@ type tidyDNSClient struct {
 	username string
 	password string
 	baseURL  string
+	counter  counter
 }
 
 type RecordType int
@@ -58,8 +61,14 @@ const (
 	RecordTypeCAA   RecordType = 10
 )
 
-func NewTidyDnsClient(baseURL, username, password string, timeout time.Duration) TidyDNSClient {
+func NewTidyDnsClient(baseURL, username, password string, timeout time.Duration, meter otel.Meter) (TidyDNSClient, error) {
 	slog.Debug("baseURL set to: " + baseURL + " with " + timeout.String() + " timeout")
+
+	counter, err := counterProvider(meter, "tidy_requests", ("Requtest made to " + baseURL))
+	if err != nil {
+		return nil, err
+	}
+
 	return &tidyDNSClient{
 		baseURL:  baseURL,
 		username: username,
@@ -67,7 +76,8 @@ func NewTidyDnsClient(baseURL, username, password string, timeout time.Duration)
 		client: &http.Client{
 			Timeout: timeout,
 		},
-	}
+		counter: counter,
+	}, nil
 }
 
 func (c *tidyDNSClient) ListZones() ([]Zone, error) {
@@ -127,6 +137,13 @@ func (c *tidyDNSClient) request(method, url string, value io.Reader, resp any) e
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("error from tidyDNS server: %s", res.Status)
 	}
+
+	// Tidy uses a strange /= prefix after the base address. Remove this first
+	urlPath, _ := strings.CutPrefix(url, "/=")
+	// Remove all parameters from the URL
+	urlPath, _, _ = strings.Cut(urlPath, "?")
+
+	c.counter(method, urlPath, res.StatusCode)
 
 	if resp == nil {
 		return nil
