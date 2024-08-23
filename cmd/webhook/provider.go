@@ -191,6 +191,10 @@ func (p *tidyProvider) parseTidyRecord(record *tidyRecord) *Endpoint {
 	// Convert description into the ProviderSpec
 	providerSpec := p.descriptionToProviderSpec(record.Description)
 
+	if record.Type == "CNAME" {
+		record.Destination = strings.TrimRight(record.Destination, ".")
+	}
+
 	// Create Endpoint
 	endpoint := endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
 	endpoint.ProviderSpecific = providerSpec
@@ -271,6 +275,10 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 		// refuse to save and removing them seemingly causes no issues for
 		// external-dns when read back.
 		target = strings.Trim(target, "\"")
+
+		if endpoint.RecordType == "CNAME" {
+			target += "."
+		}
 
 		newRec := &tidyRecord{
 			Type:        endpoint.RecordType,
