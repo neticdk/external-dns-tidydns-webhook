@@ -137,16 +137,16 @@ func (c *tidyDNSClient) request(method, url string, value io.Reader, resp any) e
 
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("error from tidyDNS server: %s", res.Status)
-	}
-
 	// Tidy uses a strange /= prefix after the base address. Remove this first
 	urlPath, _ := strings.CutPrefix(url, "/=")
 	// Remove all parameters from the URL
 	urlPath, _, _ = strings.Cut(urlPath, "?")
 
 	c.counter(method, urlPath, res.StatusCode)
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("error from tidyDNS server: %s", res.Status)
+	}
 
 	if resp == nil {
 		return nil
