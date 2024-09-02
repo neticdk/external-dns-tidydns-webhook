@@ -119,6 +119,7 @@ func (c *tidyDNSClient) DeleteRecord(zoneID int, recordID int) error {
 }
 
 func (c *tidyDNSClient) request(method, url string, value io.Reader, resp any) error {
+	slog.Debug(method + " " + c.baseURL + url)
 	req, err := http.NewRequest(method, (c.baseURL + url), value)
 	if err != nil {
 		return err
