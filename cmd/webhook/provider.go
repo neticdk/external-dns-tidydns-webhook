@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -185,8 +186,14 @@ func (p *tidyProvider) parseTidyRecord(record *tidyRecord) *Endpoint {
 		return nil
 	}
 
+	ttlTemp, err := record.TTL.Int64()
+	if err != nil {
+		slog.Warn(err.Error())
+		return nil
+	}
+
 	// Convert TTL to TTL type
-	ttl := endpoint.TTL(record.TTL)
+	ttl := endpoint.TTL(ttlTemp)
 
 	// Convert description into the ProviderSpec
 	providerSpec := p.descriptionToProviderSpec(record.Description)
@@ -285,7 +292,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 			Name:        dnsName,
 			Description: description,
 			Destination: target,
-			TTL:         ttl,
+			TTL:         json.Number(ttl),
 		}
 
 		slog.Debug(fmt.Sprintf("create record %+v", *newRec))
@@ -335,7 +342,7 @@ func restrictTTL(ttl int) int {
 // Convert FQDNs into Tidy DNS names. External-DNS communicates DNS names using
 // the FQDN where-as Tidy strips away the namespace and uses '.' when the
 // namespace is the FQDN.
-func tidyfyName(zones []tidydns.Zone, name string) (string, int) {
+func tidyfyName(zones []tidydns.Zone, name string) (string, json.Number) {
 	for _, zone := range zones {
 		if !strings.HasSuffix(name, zone.Name) {
 			continue
@@ -349,5 +356,5 @@ func tidyfyName(zones []tidydns.Zone, name string) (string, int) {
 		return ".", zone.ID
 	}
 
-	return "", 0
+	return "", "0"
 }

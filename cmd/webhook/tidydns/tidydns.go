@@ -16,25 +16,25 @@ import (
 
 type TidyDNSClient interface {
 	ListZones() ([]Zone, error)
-	CreateRecord(zoneID int, info *Record) error
-	ListRecords(zoneID int) ([]Record, error)
-	DeleteRecord(zoneID int, recordID int) error
+	CreateRecord(zoneID json.Number, info *Record) error
+	ListRecords(zoneID json.Number) ([]Record, error)
+	DeleteRecord(zoneID json.Number, recordID json.Number) error
 }
 
 type Record struct {
-	ID          int    `json:"id"`
-	Type        string `json:"type_name"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Destination string `json:"destination"`
-	TTL         int    `json:"ttl"`
-	ZoneName    string `json:"zone_name"`
-	ZoneID      int    `json:"zone_id"`
+	ID          json.Number `json:"id"`
+	Type        string      `json:"type_name"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Destination string      `json:"destination"`
+	TTL         json.Number `json:"ttl"`
+	ZoneName    string      `json:"zone_name"`
+	ZoneID      json.Number `json:"zone_id"`
 }
 
 type Zone struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID   json.Number `json:"id"`
+	Name string      `json:"name"`
 }
 
 type tidyDNSClient struct {
@@ -86,35 +86,37 @@ func (c *tidyDNSClient) ListZones() ([]Zone, error) {
 	return zones, err
 }
 
-func (c *tidyDNSClient) CreateRecord(zoneID int, info *Record) error {
+func (c *tidyDNSClient) CreateRecord(zoneID json.Number, info *Record) error {
 	recordType, err := encodeRecordType(info.Type)
 	if err != nil {
 		return err
 	}
 
+	ttl := info.TTL.String()
+
 	data := url.Values{
 		"type":        {strconv.Itoa(int(recordType))},
 		"name":        {info.Name},
-		"ttl":         {strconv.Itoa(info.TTL)},
+		"ttl":         {ttl},
 		"description": {info.Description},
 		"status":      {strconv.Itoa(0)},
 		"destination": {info.Destination},
 		"location_id": {strconv.Itoa(0)},
 	}
 
-	url := fmt.Sprintf("/=/record/new/%d", zoneID)
+	url := fmt.Sprintf("/=/record/new/%s", zoneID)
 	return c.request("POST", url, strings.NewReader(data.Encode()), nil)
 }
 
-func (c *tidyDNSClient) ListRecords(zoneID int) ([]Record, error) {
+func (c *tidyDNSClient) ListRecords(zoneID json.Number) ([]Record, error) {
 	records := []Record{}
-	url := fmt.Sprintf("/=/record_merged?type=json&zone_id=%d&showall=1", zoneID)
+	url := fmt.Sprintf("/=/record_merged?type=json&zone_id=%s&showall=1", zoneID)
 	err := c.request("GET", url, nil, &records)
 	return records, err
 }
 
-func (c *tidyDNSClient) DeleteRecord(zoneID int, recordID int) error {
-	url := fmt.Sprintf("/=/record/%d/%d", recordID, zoneID)
+func (c *tidyDNSClient) DeleteRecord(zoneID json.Number, recordID json.Number) error {
+	url := fmt.Sprintf("/=/record/%s/%s", recordID, zoneID)
 	return c.request("DELETE", url, nil, nil)
 }
 
