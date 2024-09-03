@@ -16,7 +16,7 @@ import (
 
 func main() {
 	tidyEndpoint := flag.String("tidydns-endpoint", "", "DNS server address")
-	logLevel := flag.String("log-level", "debug", "logging level (debug, info, warn, err)")
+	logLevel := flag.String("log-level", "", "logging level (debug, info, warn, err)")
 
 	zoneArgDescription := "The intercval at which to update zone information format 00h00m00s e.g. 1h32m"
 	zoneUpdateIntervalArg := flag.String("zone-update-interval", "10m", zoneArgDescription)
@@ -25,6 +25,17 @@ func main() {
 
 	tidyUsername := os.Getenv("TIDYDNS_USER")
 	tidyPassword := os.Getenv("TIDYDNS_PASS")
+
+	// If log level isn't set as a parameter, read it from the environment
+	if *logLevel == "" {
+		*logLevel = os.Getenv("EXTERNAL_DNS_LOG_LEVEL")
+	}
+
+	// If neither the application parameter or the environment sets the log
+	// level, set default
+	if *logLevel == "" {
+		*logLevel = "info"
+	}
 
 	loggingSetup(*logLevel, os.Stderr, true)
 
