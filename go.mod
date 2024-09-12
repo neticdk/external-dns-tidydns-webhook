@@ -1,6 +1,6 @@
 module github.com/neticdk/external-dns-tidydns-webhook
 
-go 1.23.0
+go 1.23.1
 
 require (
 	github.com/prometheus/client_golang v1.20.1

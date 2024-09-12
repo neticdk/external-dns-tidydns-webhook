@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Build the webhook binary
-FROM golang:1.23.0-alpine3.20 AS builder
+ARG GO_VERSION=1.23.1
+FROM golang:1.23.1 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
