@@ -24,9 +24,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags
 
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot AS application
-ARG TZ
 
-ENV TZ=${TZ}
 COPY --from=builder /webhook /
 USER 65532:65532
 ENTRYPOINT [ "/webhook" ]
