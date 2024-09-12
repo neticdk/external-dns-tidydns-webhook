@@ -44,7 +44,7 @@ type tidyRecord = tidydns.Record
 
 const annotationKey = "webhook/tidy-description"
 
-func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (Provider, error) {
+func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (*tidyProvider, error) {
 	return &tidyProvider{
 		tidy:         tidy,
 		zoneProvider: zoneProvider,

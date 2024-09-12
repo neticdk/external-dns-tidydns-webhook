@@ -25,7 +25,6 @@ import (
 
 	"sigs.k8s.io/external-dns/endpoint"
 	"sigs.k8s.io/external-dns/plan"
-	"sigs.k8s.io/external-dns/provider"
 )
 
 type webhook interface {
@@ -36,7 +35,7 @@ type webhook interface {
 }
 
 type tidyWebhook struct {
-	provider provider.Provider
+	provider *tidyProvider
 }
 
 const (
@@ -44,7 +43,7 @@ const (
 	headerValue = "application/external.dns.webhook+json;version=1"
 )
 
-func newWebhook(p provider.Provider) webhook {
+func newWebhook(p *tidyProvider) webhook {
 	return &tidyWebhook{p}
 }
 
