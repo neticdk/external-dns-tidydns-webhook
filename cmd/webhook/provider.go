@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -308,7 +309,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 			Name:        dnsName,
 			Description: description,
 			Destination: target,
-			TTL:         json.Number(ttl),
+			TTL:         json.Number(strconv.Itoa(ttl)),
 		}
 
 		slog.Debug(fmt.Sprintf("create record %+v", *newRec))
