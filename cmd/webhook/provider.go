@@ -1,3 +1,19 @@
+/*
+Copyright 2024 Netic A/S.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -5,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -28,7 +45,7 @@ type tidyRecord = tidydns.Record
 
 const annotationKey = "webhook/tidy-description"
 
-func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (Provider, error) {
+func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (*tidyProvider, error) {
 	return &tidyProvider{
 		tidy:         tidy,
 		zoneProvider: zoneProvider,
@@ -292,7 +309,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 			Name:        dnsName,
 			Description: description,
 			Destination: target,
-			TTL:         json.Number(ttl),
+			TTL:         json.Number(strconv.Itoa(ttl)),
 		}
 
 		slog.Debug(fmt.Sprintf("create record %+v", *newRec))
