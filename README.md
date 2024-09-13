@@ -52,8 +52,7 @@ image. An example is shown below:
 export VERSION=1.2.3
 export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
 export PLATFORMS='linux/amd64,linux/arm64'
-export TZ='Europe/Copenhagen'
-docker buildx build --platform=$PLATFORMS --build-arg="TZ=$TZ" --tag $REPO_PATH:$VERSION --push .
+docker buildx build --platform=$PLATFORMS --tag $REPO_PATH:$VERSION --push .
 ```
 
 If building for the local platform is sufficient the regular build/push commands
@@ -62,13 +61,9 @@ can be used:
 ```sh
 export VERSION=1.2.3
 export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
-export TZ='Europe/Copenhagen'
-docker build --build-arg="TZ=$TZ" --tag $REPO_PATH:$VERSION .
+docker build --tag $REPO_PATH:$VERSION .
 docker push $REPO_PATH:$VERSION
 ```
-
-The TZ is currently used to set the timezone for the container. This is used for
-logging in localized time with slog.
 
 The application can ofcause also be built locally for testing:
 
