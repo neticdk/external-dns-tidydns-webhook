@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -44,7 +45,7 @@ type tidyRecord = tidydns.Record
 
 const annotationKey = "webhook/tidy-description"
 
-func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (Provider, error) {
+func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (*tidyProvider, error) {
 	return &tidyProvider{
 		tidy:         tidy,
 		zoneProvider: zoneProvider,
@@ -308,7 +309,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 			Name:        dnsName,
 			Description: description,
 			Destination: target,
-			TTL:         json.Number(ttl),
+			TTL:         json.Number(strconv.Itoa(ttl)),
 		}
 
 		slog.Debug(fmt.Sprintf("create record %+v", *newRec))
