@@ -75,4 +75,6 @@ go build cmd/webhook/
 
 - So far the record types are A, AAAA and CNAME
 - Needs some unit tests
-- Add GitHub actions
+- More GitHub actions
+  - Unit tests
+  - Relase pipeline
