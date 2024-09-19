@@ -4,6 +4,8 @@ Webhook to enable
 [External-DNS](https://github.com/kubernetes-sigs/external-dns) to talk to
 [Tidy-DNS](https://www.netic.dk/).
 
+This webhook is still work in progress and represents a minimal viable product.
+
 ## Prerequisites
 
 For general development one should have the Golang environment installed.
