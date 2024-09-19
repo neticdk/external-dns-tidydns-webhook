@@ -75,6 +75,11 @@ go build cmd/webhook/
 
 ## Known Issues and Limitations
 
+- Make better use of External DNS constructs in code, see
+  [External DNS webhook](https://github.com/kubernetes-sigs/external-dns/blob/master/provider/webhook/webhook.go)
+- An effort should be made to use
+  [tidydns-go](https://github.com/neticdk/tidydns-go) instead of the local
+  tidydns package
 - So far the record types are A, AAAA and CNAME
 - Needs some unit tests
 - More GitHub actions
