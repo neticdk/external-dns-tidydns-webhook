@@ -168,11 +168,7 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 	}
 
 	for _, old := range changes.UpdateOld {
-		wg.Add(1)
-		func() {
-			defer wg.Done()
-			p.deleteEndpoint(allRecords, old)
-		}()
+		p.deleteEndpoint(allRecords, old)
 	}
 
 	for _, new := range changes.UpdateNew {
