@@ -109,7 +109,7 @@ func (p *tidyProvider) Records(ctx context.Context) ([]*Endpoint, error) {
 func (p *tidyProvider) AdjustEndpoints(endpoints []*Endpoint) ([]*Endpoint, error) {
 	for _, v := range endpoints {
 		// Restrict TTL to permitted range by Tidy DNS
-		v.RecordTTL = endpoint.TTL(restrictTTL(int(v.RecordTTL)))
+		v.RecordTTL = endpoint.TTL(clampTTL(int(v.RecordTTL)))
 
 		// Labels are not supported hence removed
 		v.Labels = endpoint.Labels{}
@@ -247,7 +247,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 		return
 	}
 
-	ttl := restrictTTL(int(endpoint.RecordTTL))
+	ttl := clampTTL(int(endpoint.RecordTTL))
 
 	for _, target := range endpoint.Targets {
 		// For some reason external-dns wraps the value of certain TXT records
@@ -279,8 +279,8 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 
 // Handles sanitizing TTL to Tidy. TidyDNS doesn't support TTL under 300 except
 // 0 which is the namespace default value
-func restrictTTL(ttl int) int {
-	if ttl != 0 && ttl < 300 {
+func clampTTL(ttl int) int {
+	if ttl > 0 && ttl < 300 {
 		return 300
 	}
 
