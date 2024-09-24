@@ -26,7 +26,6 @@ import (
 	"sync"
 
 	"github.com/neticdk/external-dns-tidydns-webhook/cmd/webhook/tidydns"
-	"golang.org/x/exp/utf8string"
 	"golang.org/x/net/idna"
 	"sigs.k8s.io/external-dns/endpoint"
 	"sigs.k8s.io/external-dns/plan"
@@ -40,10 +39,7 @@ type tidyProvider struct {
 
 type Provider = provider.Provider
 type Endpoint = endpoint.Endpoint
-type ProviderSpecific = endpoint.ProviderSpecific
 type tidyRecord = tidydns.Record
-
-const annotationKey = "webhook/tidy-description"
 
 func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (*tidyProvider, error) {
 	return &tidyProvider{
@@ -116,22 +112,6 @@ func (p *tidyProvider) AdjustEndpoints(endpoints []*Endpoint) ([]*Endpoint, erro
 
 		// Any unicode is encoded as punycode
 		v.DNSName, _ = idna.Lookup.ToASCII(v.DNSName)
-
-		// The only supported ProviderSpecific is the one given by the
-		// annotationKey parameter that is used as a record description
-		ps := v.ProviderSpecific
-		v.ProviderSpecific = ProviderSpecific{}
-		for i := range ps {
-			if ps[i].Name == annotationKey {
-				unicodeComment := utf8string.NewString(ps[i].Value)
-				if unicodeComment.RuneCount() >= 1024 {
-					slog.Warn("comment to long on endpoint" + v.DNSName)
-					continue
-				}
-
-				v.ProviderSpecific = ProviderSpecific{ps[i]}
-			}
-		}
 	}
 
 	return endpoints, nil
@@ -208,18 +188,12 @@ func parseTidyRecord(record *tidyRecord) *Endpoint {
 	// Convert TTL to TTL type
 	ttl := endpoint.TTL(ttlTemp)
 
-	// Convert description into the ProviderSpec
-	providerSpec := descriptionToProviderSpec(record.Description)
-
 	if record.Type == "CNAME" {
 		record.Destination = strings.TrimRight(record.Destination, ".")
 	}
 
 	// Create Endpoint
-	endpoint := endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
-	endpoint.ProviderSpecific = providerSpec
-
-	return endpoint
+	return endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
 }
 
 // Fetch and create a list of all records from all zones
@@ -287,7 +261,6 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 	}
 
 	ttl := restrictTTL(int(endpoint.RecordTTL))
-	description := providerSpecToDescription(endpoint.ProviderSpecific)
 
 	for _, target := range endpoint.Targets {
 		// For some reason external-dns wraps the value of certain TXT records
@@ -303,7 +276,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 		newRec := &tidyRecord{
 			Type:        endpoint.RecordType,
 			Name:        dnsName,
-			Description: description,
+			Description: "",
 			Destination: target,
 			TTL:         json.Number(strconv.Itoa(ttl)),
 		}
@@ -314,31 +287,6 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 			slog.Debug(fmt.Sprintf("%+v", *newRec))
 			return
 		}
-	}
-}
-
-// Convert providerSpec to description
-func providerSpecToDescription(providerSpec ProviderSpecific) string {
-	for _, ps := range providerSpec {
-		if ps.Name == annotationKey {
-			return ps.Value
-		}
-	}
-
-	return ""
-}
-
-// Convert description to providerSpec
-func descriptionToProviderSpec(description string) ProviderSpecific {
-	if description == "" {
-		return ProviderSpecific{}
-	}
-
-	return ProviderSpecific{
-		{
-			Name:  annotationKey,
-			Value: description,
-		},
 	}
 }
 
