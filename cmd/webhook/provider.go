@@ -209,35 +209,24 @@ func (p *tidyProvider) allRecords() ([]tidyRecord, error) {
 	return allRecords, nil
 }
 
+// Find all matching records from a list and delete them. Since one endpoint can
+// have multiple targets an endpoint can represent multiple records in Tidy.
 func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoint) {
-	foundRecords := findRecords(allRecords, endpoint)
-	if len(foundRecords) == 0 {
-		return
-	}
-
-	for _, record := range foundRecords {
-		slog.Debug(fmt.Sprintf("delete record %+v", record))
-		if err := p.tidy.DeleteRecord(record.ZoneID, record.ID); err != nil {
-			return
-		}
-	}
-}
-
-// Find all matching records from a list. Since one endpoint cam have multiple
-// targets an endpoint can represent multiple records in Tidy.
-func findRecords(records []tidyRecord, endpoint *Endpoint) []tidyRecord {
-	found := []tidydns.Record{}
 	for _, target := range endpoint.Targets {
-		for _, record := range records {
+		for _, record := range allRecords {
 			dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
 
-			if dnsName == endpoint.DNSName && record.Type == endpoint.RecordType && record.Destination == target {
-				found = append(found, record)
+			if dnsName != endpoint.DNSName || record.Type != endpoint.RecordType || record.Destination != target {
+				continue
+			}
+
+			slog.Debug(fmt.Sprintf("delete record %+v", record))
+			err := p.tidy.DeleteRecord(record.ZoneID, record.ID)
+			if err != nil {
+				return
 			}
 		}
 	}
-
-	return found
 }
 
 func tidyNameToFQDN(name, zone string) string {
