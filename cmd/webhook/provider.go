@@ -172,16 +172,7 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 // the TTL, the content of a TXT record and the DNS name.
 func parseTidyRecord(record *tidyRecord) *Endpoint {
 	// Convert DNS name into a FQDN
-	var dnsName string
-	if record.Name == "." {
-		dnsName = record.ZoneName
-	} else {
-		dnsName = record.Name + "." + record.ZoneName
-	}
-
-	if dnsName == "" {
-		return nil
-	}
+	dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
 
 	ttlTemp, err := record.TTL.Int64()
 	if err != nil {
@@ -233,17 +224,12 @@ func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoin
 }
 
 // Find all matching records from a list. Since one endpoint cam have multiple
-// targets they can represent multiple records in Tidy.
+// targets an endpoint can represent multiple records in Tidy.
 func findRecords(records []tidyRecord, endpoint *Endpoint) []tidyRecord {
 	found := []tidydns.Record{}
 	for _, target := range endpoint.Targets {
 		for _, record := range records {
-			dnsName := ""
-			if record.Name == "." {
-				dnsName = record.ZoneName
-			} else {
-				dnsName = record.Name + "." + record.ZoneName
-			}
+			dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
 
 			if dnsName == endpoint.DNSName && record.Type == endpoint.RecordType && record.Destination == target {
 				found = append(found, record)
@@ -252,6 +238,14 @@ func findRecords(records []tidyRecord, endpoint *Endpoint) []tidyRecord {
 	}
 
 	return found
+}
+
+func tidyNameToFQDN(name, zone string) string {
+	if name == "." {
+		return zone
+	}
+
+	return name + "." + zone
 }
 
 // Create record(s) from an External-DNS endpoint. As endpoints can have
