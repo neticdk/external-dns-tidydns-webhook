@@ -78,7 +78,7 @@ func (p *tidyProvider) Records(ctx context.Context) ([]*Endpoint, error) {
 	endpoints := []*Endpoint{}
 
 	for _, record := range allRecords {
-		endpoint := p.parseTidyRecord(&record)
+		endpoint := parseTidyRecord(&record)
 		if endpoint == nil {
 			continue
 		}
@@ -186,7 +186,7 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 
 // Convert a Tidy record into an External-DNS endpoint. This potentially changes
 // the TTL, the content of a TXT record and the DNS name.
-func (p *tidyProvider) parseTidyRecord(record *tidyRecord) *Endpoint {
+func parseTidyRecord(record *tidyRecord) *Endpoint {
 	// Convert DNS name into a FQDN
 	var dnsName string
 	if record.Name == "." {
@@ -209,7 +209,7 @@ func (p *tidyProvider) parseTidyRecord(record *tidyRecord) *Endpoint {
 	ttl := endpoint.TTL(ttlTemp)
 
 	// Convert description into the ProviderSpec
-	providerSpec := p.descriptionToProviderSpec(record.Description)
+	providerSpec := descriptionToProviderSpec(record.Description)
 
 	if record.Type == "CNAME" {
 		record.Destination = strings.TrimRight(record.Destination, ".")
@@ -241,7 +241,7 @@ func (p *tidyProvider) allRecords() ([]tidyRecord, error) {
 }
 
 func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoint) {
-	foundRecords := p.findRecords(allRecords, endpoint)
+	foundRecords := findRecords(allRecords, endpoint)
 	if len(foundRecords) == 0 {
 		return
 	}
@@ -256,7 +256,7 @@ func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoin
 
 // Find all matching records from a list. Since one endpoint cam have multiple
 // targets they can represent multiple records in Tidy.
-func (p *tidyProvider) findRecords(records []tidyRecord, endpoint *Endpoint) []tidyRecord {
+func findRecords(records []tidyRecord, endpoint *Endpoint) []tidyRecord {
 	found := []tidydns.Record{}
 	for _, target := range endpoint.Targets {
 		for _, record := range records {
@@ -287,7 +287,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 	}
 
 	ttl := restrictTTL(int(endpoint.RecordTTL))
-	description := p.providerSpecToDescription(endpoint.ProviderSpecific)
+	description := providerSpecToDescription(endpoint.ProviderSpecific)
 
 	for _, target := range endpoint.Targets {
 		// For some reason external-dns wraps the value of certain TXT records
@@ -318,7 +318,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 }
 
 // Convert providerSpec to description
-func (p *tidyProvider) providerSpecToDescription(providerSpec ProviderSpecific) string {
+func providerSpecToDescription(providerSpec ProviderSpecific) string {
 	for _, ps := range providerSpec {
 		if ps.Name == annotationKey {
 			return ps.Value
@@ -329,7 +329,7 @@ func (p *tidyProvider) providerSpecToDescription(providerSpec ProviderSpecific) 
 }
 
 // Convert description to providerSpec
-func (p *tidyProvider) descriptionToProviderSpec(description string) ProviderSpecific {
+func descriptionToProviderSpec(description string) ProviderSpecific {
 	if description == "" {
 		return ProviderSpecific{}
 	}
