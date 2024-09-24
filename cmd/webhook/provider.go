@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/neticdk/external-dns-tidydns-webhook/cmd/webhook/tidydns"
 	"golang.org/x/net/idna"
@@ -41,7 +42,10 @@ type Provider = provider.Provider
 type Endpoint = endpoint.Endpoint
 type tidyRecord = tidydns.Record
 
-func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) *tidyProvider {
+func newProvider(tidy tidydns.TidyDNSClient, zoneUpdateInterval time.Duration) *tidyProvider {
+	// Make zoneprovider to fetch the zone information with at the set interval
+	zoneProvider := newZoneProvider(tidy, zoneUpdateInterval)
+
 	return &tidyProvider{
 		tidy:         tidy,
 		zoneProvider: zoneProvider,

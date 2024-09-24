@@ -88,12 +88,9 @@ func main() {
 		panic(err.Error())
 	}
 
-	// Make zoneprovider to fetch the zone information with at the set interval
-	zoneProvider := newZoneProvider(tidy, zoneUpdateInterval)
-
 	// With the Tidy object, make a provider to handle the logic and conversions
 	// between External-DNS and Tidy
-	provider := newProvider(tidy, zoneProvider)
+	provider := newProvider(tidy, zoneUpdateInterval)
 
 	// Start webserver to service requests from External-DNS
 	go api.StartHTTPApi(provider, nil, *readTimeout, *writeTimeout, "127.0.0.1:8888")
