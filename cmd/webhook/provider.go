@@ -53,7 +53,7 @@ func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (*tidyPr
 }
 
 // Get list of zones from Tidy and return a domain filter based on them.
-func (p *tidyProvider) GetDomainFilter() endpoint.DomainFilter {
+func (p *tidyProvider) GetDomainFilter() endpoint.DomainFilterInterface {
 	// Make list of all zone names
 	zoneNames := []string{}
 	for _, zone := range p.zoneProvider.getZones() {

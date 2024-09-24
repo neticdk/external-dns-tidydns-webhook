@@ -22,6 +22,8 @@ The application arguments are as follows:
 - `tidydns-endpoint` Tidy DNS server addr
 - `zone-update-interval` The time-duration between updating the zone information
 - `log-level` Application logging level (debug, info, warn, error)
+- `read-timeout` Read timeout in duration format (default: 5s)
+- `write-timeout` Write timeout in duration format (default: 10s)
 
 This application is strictly meant to run in a container as a sidecar to
 External-DNS inside a Kubernetes environment. Refer to the External-DNS
@@ -75,8 +77,6 @@ go build cmd/webhook/
 
 ## Known Issues and Limitations
 
-- Make better use of External DNS constructs in code, see
-  [External DNS webhook](https://github.com/kubernetes-sigs/external-dns/blob/master/provider/webhook/webhook.go)
 - An effort should be made to use
   [tidydns-go](https://github.com/neticdk/tidydns-go) instead of the local
   tidydns package

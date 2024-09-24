@@ -246,6 +246,7 @@ k8s.io/utils/strings/slices
 sigs.k8s.io/external-dns/endpoint
 sigs.k8s.io/external-dns/plan
 sigs.k8s.io/external-dns/provider
+sigs.k8s.io/external-dns/provider/webhook/api
 # sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd
 ## explicit; go 1.18
 sigs.k8s.io/json

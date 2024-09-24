@@ -28,11 +28,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"sigs.k8s.io/external-dns/provider/webhook/api"
 )
 
 func main() {
 	tidyEndpoint := flag.String("tidydns-endpoint", "", "DNS server address")
 	logLevel := flag.String("log-level", "", "logging level (debug, info, warn, err)")
+	readTimeout := flag.Duration("read-timeout", (5 * time.Second), "Read timeout in duration format (default: 5s)")
+	writeTimeout := flag.Duration("write-timeout", (10 * time.Second), "Write timeout in duration format (default: 10s)")
 
 	zoneArgDescription := "The intercval at which to update zone information format 00h00m00s e.g. 1h32m"
 	zoneUpdateIntervalArg := flag.String("zone-update-interval", "10m", zoneArgDescription)
@@ -96,15 +99,8 @@ func main() {
 		panic(err.Error())
 	}
 
-	// Use the provider to make a webhook containing all the callable endpoints
-	webhook := newWebhook(provider)
-
 	// Start webserver to service requests from External-DNS
-	go func() {
-		if err = serveWebhook(webhook, "127.0.0.1:8888"); err != nil {
-			panic(err.Error())
-		}
-	}()
+	go api.StartHTTPApi(provider, nil, *readTimeout, *writeTimeout, "127.0.0.1:8888")
 
 	metricsHandler := promhttp.Handler()
 
