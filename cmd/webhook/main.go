@@ -26,14 +26,16 @@ import (
 
 	"github.com/neticdk/external-dns-tidydns-webhook/cmd/webhook/tidydns"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"sigs.k8s.io/external-dns/provider/webhook/api"
 )
 
 func main() {
+	logLevel := flag.String("log-level", "info", "Set the level of logging. (default: info, options: debug, info, warning, error)")
+	logFormat := flag.String("log-format", "text", "The format in which log messages are printed (default: text, options: text, json)")
 	tidyEndpoint := flag.String("tidydns-endpoint", "", "DNS server address")
-	logLevel := flag.String("log-level", "", "logging level (debug, info, warn, err)")
 	readTimeout := flag.Duration("read-timeout", (5 * time.Second), "Read timeout in duration format (default: 5s)")
 	writeTimeout := flag.Duration("write-timeout", (10 * time.Second), "Write timeout in duration format (default: 10s)")
 
@@ -45,18 +47,15 @@ func main() {
 	tidyUsername := os.Getenv("TIDYDNS_USER")
 	tidyPassword := os.Getenv("TIDYDNS_PASS")
 
-	// If log level isn't set as a parameter, read it from the environment
-	if *logLevel == "" {
-		*logLevel = os.Getenv("EXTERNAL_DNS_LOG_LEVEL")
-	}
+	// Setup the default slog logger
+	loggingSetup(*logFormat, *logLevel, os.Stderr, true)
 
-	// If neither the application parameter or the environment sets the log
-	// level, set default
-	if *logLevel == "" {
-		*logLevel = "info"
+	// External DNS uses logrus for logging, so we set that up as well
+	if *logFormat == "json" {
+		log.SetFormatter(&log.JSONFormatter{})
+	} else {
+		log.SetFormatter(&log.TextFormatter{})
 	}
-
-	loggingSetup(*logLevel, os.Stderr, true)
 
 	// Print stachtraces with slog
 	defer func() {

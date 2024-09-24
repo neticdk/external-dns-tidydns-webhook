@@ -22,6 +22,7 @@ The application arguments are as follows:
 - `tidydns-endpoint` Tidy DNS server addr
 - `zone-update-interval` The time-duration between updating the zone information
 - `log-level` Application logging level (debug, info, warn, error)
+- `log-format` Application logging format (json or text)
 - `read-timeout` Read timeout in duration format (default: 5s)
 - `write-timeout` Write timeout in duration format (default: 10s)
 
