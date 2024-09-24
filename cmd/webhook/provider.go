@@ -41,11 +41,11 @@ type Provider = provider.Provider
 type Endpoint = endpoint.Endpoint
 type tidyRecord = tidydns.Record
 
-func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (*tidyProvider, error) {
+func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) *tidyProvider {
 	return &tidyProvider{
 		tidy:         tidy,
 		zoneProvider: zoneProvider,
-	}, nil
+	}
 }
 
 // Get list of zones from Tidy and return a domain filter based on them.

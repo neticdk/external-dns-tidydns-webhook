@@ -93,10 +93,7 @@ func main() {
 
 	// With the Tidy object, make a provider to handle the logic and conversions
 	// between External-DNS and Tidy
-	provider, err := newProvider(tidy, zoneProvider)
-	if err != nil {
-		panic(err.Error())
-	}
+	provider := newProvider(tidy, zoneProvider)
 
 	// Start webserver to service requests from External-DNS
 	go api.StartHTTPApi(provider, nil, *readTimeout, *writeTimeout, "127.0.0.1:8888")
