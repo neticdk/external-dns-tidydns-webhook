@@ -31,7 +31,6 @@ func serveWebhook(wh webhook, addr string) error {
 	mux.HandleFunc("GET /records", wh.getRecords)
 	mux.HandleFunc("POST /adjustendpoints", wh.adjustEndpoints)
 	mux.HandleFunc("POST /records", wh.applyChanges)
-	mux.HandleFunc("GET /healthz", healthz)
 
 	server := http.Server{
 		Addr:    addr,
