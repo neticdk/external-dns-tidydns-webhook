@@ -170,29 +170,6 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 	return nil
 }
 
-// Convert a Tidy record into an External-DNS endpoint. This potentially changes
-// the TTL, the content of a TXT record and the DNS name.
-func parseTidyRecord(record *tidyRecord) *Endpoint {
-	// Convert DNS name into a FQDN
-	dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
-
-	ttlTemp, err := record.TTL.Int64()
-	if err != nil {
-		slog.Error(err.Error())
-		return nil
-	}
-
-	// Convert TTL to TTL type
-	ttl := endpoint.TTL(ttlTemp)
-
-	if record.Type == "CNAME" {
-		record.Destination = strings.TrimRight(record.Destination, ".")
-	}
-
-	// Create Endpoint
-	return endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
-}
-
 // Fetch and create a list of all records from all zones
 func (p *tidyProvider) allRecords() ([]tidyRecord, error) {
 	allRecords := []tidyRecord{}
@@ -228,14 +205,6 @@ func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoin
 			}
 		}
 	}
-}
-
-func tidyNameToFQDN(name, zone string) string {
-	if name == "." {
-		return zone
-	}
-
-	return name + "." + zone
 }
 
 // Create record(s) from an External-DNS endpoint. As endpoints can have
@@ -276,6 +245,37 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 			return
 		}
 	}
+}
+
+// Convert a Tidy record into an External-DNS endpoint. This potentially changes
+// the TTL, the content of a TXT record and the DNS name.
+func parseTidyRecord(record *tidyRecord) *Endpoint {
+	// Convert DNS name into a FQDN
+	dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
+
+	ttlTemp, err := record.TTL.Int64()
+	if err != nil {
+		slog.Error(err.Error())
+		return nil
+	}
+
+	// Convert TTL to TTL type
+	ttl := endpoint.TTL(ttlTemp)
+
+	if record.Type == "CNAME" {
+		record.Destination = strings.TrimRight(record.Destination, ".")
+	}
+
+	// Create Endpoint
+	return endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
+}
+
+func tidyNameToFQDN(name, zone string) string {
+	if name == "." {
+		return zone
+	}
+
+	return name + "." + zone
 }
 
 // Handles sanitizing TTL to Tidy. TidyDNS doesn't support TTL under 300 except
