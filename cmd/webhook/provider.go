@@ -72,6 +72,7 @@ func (p *tidyProvider) GetDomainFilter() endpoint.DomainFilterInterface {
 func (p *tidyProvider) Records(ctx context.Context) ([]*Endpoint, error) {
 	allRecords, err := p.allRecords()
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
@@ -140,6 +141,7 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 
 	allRecords, err := p.allRecords()
 	if err != nil {
+		slog.Error(err.Error())
 		return err
 	}
 
@@ -176,7 +178,7 @@ func parseTidyRecord(record *tidyRecord) *Endpoint {
 
 	ttlTemp, err := record.TTL.Int64()
 	if err != nil {
-		slog.Warn(err.Error())
+		slog.Error(err.Error())
 		return nil
 	}
 
@@ -193,11 +195,9 @@ func parseTidyRecord(record *tidyRecord) *Endpoint {
 
 // Fetch and create a list of all records from all zones
 func (p *tidyProvider) allRecords() ([]tidyRecord, error) {
-	zones := p.zoneProvider.getZones()
-
 	allRecords := []tidyRecord{}
 
-	for _, zone := range zones {
+	for _, zone := range p.zoneProvider.getZones() {
 		records, err := p.tidy.ListRecords(zone.ID)
 		if err != nil {
 			return nil, err
@@ -223,6 +223,7 @@ func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoin
 			slog.Debug(fmt.Sprintf("delete record %+v", record))
 			err := p.tidy.DeleteRecord(record.ZoneID, record.ID)
 			if err != nil {
+				slog.Error(err.Error())
 				return
 			}
 		}

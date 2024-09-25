@@ -60,6 +60,7 @@ func newZoneProvider(tidy tidydns.TidyDNSClient, updateInterval time.Duration) Z
 			case <-ticker.C:
 				zones, err := tidy.ListZones()
 				if err != nil {
+					slog.Error(err.Error())
 					continue
 				}
 
