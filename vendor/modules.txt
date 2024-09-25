@@ -145,9 +145,6 @@ go.opentelemetry.io/otel/sdk/metric/metricdata
 ## explicit; go 1.22
 go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
-# golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
-## explicit; go 1.22.0
-golang.org/x/exp/utf8string
 # golang.org/x/net v0.29.0
 ## explicit; go 1.18
 golang.org/x/net/http/httpguts
