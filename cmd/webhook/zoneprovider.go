@@ -37,22 +37,23 @@ type zoneProvider chan chan []tidydns.Zone
 // zone list is re-fetched every 10 minutes.
 func newZoneProvider(tidy tidydns.TidyDNSClient, updateInterval time.Duration) ZoneProvider {
 	provider := make(zoneProvider, 1)
+
+	// Get all tidy zones
+	zones, err := tidy.ListZones()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	zonesStr := []string{}
+	for _, v := range zones {
+		zonesStr = append(zonesStr, v.Name)
+	}
+
+	slog.Debug("DNS zones: " + strings.Join(zonesStr, ", "))
+
+	ticker := time.NewTicker(updateInterval)
+
 	go func() {
-		// Get all tidy zones
-		zones, err := tidy.ListZones()
-		if err != nil {
-			panic(err.Error())
-		}
-
-		zonesStr := []string{}
-		for _, v := range zones {
-			zonesStr = append(zonesStr, v.Name)
-		}
-
-		slog.Debug("DNS zones: " + strings.Join(zonesStr, ", "))
-
-		ticker := time.NewTicker(updateInterval)
-
 		for {
 			select {
 			case respChan := <-provider:
