@@ -18,7 +18,6 @@ package main
 
 import (
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/neticdk/external-dns-tidydns-webhook/cmd/webhook/tidydns"
@@ -44,13 +43,6 @@ func newZoneProvider(tidy tidydns.TidyDNSClient, updateInterval time.Duration) Z
 		panic(err.Error())
 	}
 
-	zonesStr := []string{}
-	for _, v := range zones {
-		zonesStr = append(zonesStr, v.Name)
-	}
-
-	slog.Debug("can access DNS zones " + strings.Join(zonesStr, ", "))
-
 	ticker := time.NewTicker(updateInterval)
 
 	go func() {
@@ -59,15 +51,9 @@ func newZoneProvider(tidy tidydns.TidyDNSClient, updateInterval time.Duration) Z
 			case respChan := <-provider:
 				respChan <- zones
 			case <-ticker.C:
-				zones, err := tidy.ListZones()
-				if err != nil {
-					slog.Error(err.Error())
+				if zones, err = tidy.ListZones(); err != nil {
+					slog.Error("error updating zones", "error", err)
 					continue
-				}
-
-				zonesStr = []string{}
-				for _, v := range zones {
-					zonesStr = append(zonesStr, v.Name)
 				}
 			}
 		}
