@@ -17,8 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"io"
 	"log/slog"
-	"os"
 )
 
 const defaultLogLevel = slog.LevelInfo
@@ -27,7 +27,7 @@ const defaultLogLevel = slog.LevelInfo
 // one of (debug, info, warn, error), an out file where the log will be printet
 // to and the addSource boolean which when true will cause slog to print the
 // func, file and sourceline of the log call.
-func loggingSetup(logFormat, logLevel string, out *os.File, addSource bool) *slog.Logger {
+func loggingSetup(logFormat, logLevel string, out io.Writer, addSource bool) *slog.Logger {
 	programLevel := new(slog.LevelVar)
 	handlerOpts := slog.HandlerOptions{
 		Level:     programLevel,
