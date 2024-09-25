@@ -49,7 +49,7 @@ func newZoneProvider(tidy tidydns.TidyDNSClient, updateInterval time.Duration) Z
 		zonesStr = append(zonesStr, v.Name)
 	}
 
-	slog.Debug("DNS zones: " + strings.Join(zonesStr, ", "))
+	slog.Debug("can access DNS zones " + strings.Join(zonesStr, ", "))
 
 	ticker := time.NewTicker(updateInterval)
 

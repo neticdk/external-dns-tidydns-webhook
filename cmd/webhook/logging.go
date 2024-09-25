@@ -49,6 +49,6 @@ func loggingSetup(logFormat, logLevel string, out *os.File, addSource bool) *slo
 		programLevel.Set(defaultLogLevel)
 	}
 
-	slog.Debug("loglevel set to: " + programLevel.Level().String())
+	slog.Debug("using loglevel " + programLevel.Level().String())
 	return logger
 }
