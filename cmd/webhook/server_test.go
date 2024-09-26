@@ -17,27 +17,21 @@ limitations under the License.
 package main
 
 import (
-	"log/slog"
 	"net/http"
-	"runtime/metrics"
+	"net/http/httptest"
+	"testing"
 )
 
-type Samples []metrics.Sample
-
-func serveExposed(addr string, metricsHandler http.Handler) error {
-	slog.Debug("start webhook server on " + addr)
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", healthz)
-	mux.Handle("GET /metrics", metricsHandler)
-
-	server := http.Server{
-		Addr:    addr,
-		Handler: mux,
+func TestHealthz(t *testing.T) {
+	req, err := http.NewRequest("GET", "/healthz", nil)
+	if err != nil {
+		t.Fatalf("Could not create request: %v", err)
 	}
 
-	return server.ListenAndServe()
-}
+	rec := httptest.NewRecorder()
+	healthz(rec, req)
 
-func healthz(w http.ResponseWriter, req *http.Request) {
-	w.WriteHeader(http.StatusOK)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status OK; got %v", rec.Code)
+	}
 }

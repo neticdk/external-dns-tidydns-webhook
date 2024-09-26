@@ -26,34 +26,35 @@ import (
 
 	"github.com/neticdk/external-dns-tidydns-webhook/cmd/webhook/tidydns"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"sigs.k8s.io/external-dns/provider/webhook/api"
 )
 
+type config struct {
+	logLevel           string
+	logFormat          string
+	tidyEndpoint       string
+	readTimeout        time.Duration
+	writeTimeout       time.Duration
+	zoneUpdateInterval time.Duration
+	tidyUsername       string
+	tidyPassword       string
+}
+
 func main() {
-	tidyEndpoint := flag.String("tidydns-endpoint", "", "DNS server address")
-	logLevel := flag.String("log-level", "", "logging level (debug, info, warn, err)")
+	cfg, parsingErr := parseConfig()
 
-	zoneArgDescription := "The intercval at which to update zone information format 00h00m00s e.g. 1h32m"
-	zoneUpdateIntervalArg := flag.String("zone-update-interval", "10m", zoneArgDescription)
+	// Setup the default slog logger
+	loggingSetup(cfg.logFormat, cfg.logLevel, os.Stderr, true)
 
-	flag.Parse()
-
-	tidyUsername := os.Getenv("TIDYDNS_USER")
-	tidyPassword := os.Getenv("TIDYDNS_PASS")
-
-	// If log level isn't set as a parameter, read it from the environment
-	if *logLevel == "" {
-		*logLevel = os.Getenv("EXTERNAL_DNS_LOG_LEVEL")
+	// External DNS uses logrus for logging, so we set that up as well
+	if cfg.logFormat == "json" {
+		log.SetFormatter(&log.JSONFormatter{})
+	} else {
+		log.SetFormatter(&log.TextFormatter{})
 	}
-
-	// If neither the application parameter or the environment sets the log
-	// level, set default
-	if *logLevel == "" {
-		*logLevel = "info"
-	}
-
-	loggingSetup(*logLevel, os.Stderr, true)
 
 	// Print stachtraces with slog
 	defer func() {
@@ -64,10 +65,9 @@ func main() {
 		}
 	}()
 
-	// Parse the interval deciding how often the zone information is updated
-	zoneUpdateInterval, err := time.ParseDuration(*zoneUpdateIntervalArg)
-	if err != nil {
-		panic(err.Error())
+	// We check for parsingerrors here, as we want to log them with slog
+	if parsingErr != nil {
+		panic(parsingErr.Error())
 	}
 
 	// Create a Prometheus reader/exporter
@@ -81,30 +81,17 @@ func main() {
 	tidyMeter := meterProvider.Meter("tidy")
 
 	// Make a Tidy object to abstract calls to Tidy
-	tidy, err := tidydns.NewTidyDnsClient(*tidyEndpoint, tidyUsername, tidyPassword, (10 * time.Second), tidyMeter)
+	tidy, err := tidydns.NewTidyDnsClient(cfg.tidyEndpoint, cfg.tidyUsername, cfg.tidyPassword, (10 * time.Second), tidyMeter)
 	if err != nil {
 		panic(err.Error())
 	}
-
-	// Make zoneprovider to fetch the zone information with at the set interval
-	zoneProvider := newZoneProvider(tidy, zoneUpdateInterval)
 
 	// With the Tidy object, make a provider to handle the logic and conversions
 	// between External-DNS and Tidy
-	provider, err := newProvider(tidy, zoneProvider)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// Use the provider to make a webhook containing all the callable endpoints
-	webhook := newWebhook(provider)
+	provider := newProvider(tidy, cfg.zoneUpdateInterval)
 
 	// Start webserver to service requests from External-DNS
-	go func() {
-		if err = serveWebhook(webhook, "127.0.0.1:8888"); err != nil {
-			panic(err.Error())
-		}
-	}()
+	go api.StartHTTPApi(provider, nil, cfg.readTimeout, cfg.writeTimeout, "127.0.0.1:8888")
 
 	metricsHandler := promhttp.Handler()
 
@@ -112,4 +99,37 @@ func main() {
 	if err = serveExposed("0.0.0.0:8080", metricsHandler); err != nil {
 		panic(err.Error())
 	}
+}
+
+func parseConfig() (*config, error) {
+	logLevel := flag.String("log-level", "info", "Set the level of logging. (default: info, options: debug, info, warning, error)")
+	logFormat := flag.String("log-format", "text", "The format in which log messages are printed (default: text, options: text, json)")
+	tidyEndpoint := flag.String("tidydns-endpoint", "", "DNS server address")
+	readTimeout := flag.Duration("read-timeout", (5 * time.Second), "Read timeout in duration format (default: 5s)")
+	writeTimeout := flag.Duration("write-timeout", (10 * time.Second), "Write timeout in duration format (default: 10s)")
+
+	zoneArgDescription := "The intercval at which to update zone information format 00h00m00s e.g. 1h32m"
+	zoneUpdateIntervalArg := flag.String("zone-update-interval", "10m", zoneArgDescription)
+
+	flag.Parse()
+
+	tidyUsername := os.Getenv("TIDYDNS_USER")
+	tidyPassword := os.Getenv("TIDYDNS_PASS")
+
+	// Parse the interval deciding how often the zone information is updated
+	zoneUpdateInterval, err := time.ParseDuration(*zoneUpdateIntervalArg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config{
+		logLevel:           *logLevel,
+		logFormat:          *logFormat,
+		tidyEndpoint:       *tidyEndpoint,
+		readTimeout:        *readTimeout,
+		writeTimeout:       *writeTimeout,
+		zoneUpdateInterval: zoneUpdateInterval,
+		tidyUsername:       tidyUsername,
+		tidyPassword:       tidyPassword,
+	}, nil
 }

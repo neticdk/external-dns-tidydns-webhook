@@ -4,6 +4,8 @@ Webhook to enable
 [External-DNS](https://github.com/kubernetes-sigs/external-dns) to talk to
 [Tidy-DNS](https://www.netic.dk/).
 
+This webhook is still work in progress and represents a minimal viable product.
+
 ## Prerequisites
 
 For general development one should have the Golang environment installed.
@@ -20,6 +22,9 @@ The application arguments are as follows:
 - `tidydns-endpoint` Tidy DNS server addr
 - `zone-update-interval` The time-duration between updating the zone information
 - `log-level` Application logging level (debug, info, warn, error)
+- `log-format` Application logging format (json or text)
+- `read-timeout` Read timeout in duration format (default: 5s)
+- `write-timeout` Write timeout in duration format (default: 10s)
 
 This application is strictly meant to run in a container as a sidecar to
 External-DNS inside a Kubernetes environment. Refer to the External-DNS
@@ -52,8 +57,7 @@ image. An example is shown below:
 export VERSION=1.2.3
 export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
 export PLATFORMS='linux/amd64,linux/arm64'
-export TZ='Europe/Copenhagen'
-docker buildx build --platform=$PLATFORMS --build-arg="TZ=$TZ" --tag $REPO_PATH:$VERSION --push .
+docker buildx build --platform=$PLATFORMS --tag $REPO_PATH:$VERSION --push .
 ```
 
 If building for the local platform is sufficient the regular build/push commands
@@ -62,13 +66,9 @@ can be used:
 ```sh
 export VERSION=1.2.3
 export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
-export TZ='Europe/Copenhagen'
-docker build --build-arg="TZ=$TZ" --tag $REPO_PATH:$VERSION .
+docker build --tag $REPO_PATH:$VERSION .
 docker push $REPO_PATH:$VERSION
 ```
-
-The TZ is currently used to set the timezone for the container. This is used for
-logging in localized time with slog.
 
 The application can ofcause also be built locally for testing:
 
@@ -78,6 +78,9 @@ go build cmd/webhook/
 
 ## Known Issues and Limitations
 
+- An effort should be made to use
+  [tidydns-go](https://github.com/neticdk/tidydns-go) instead of the local
+  tidydns package
 - So far the record types are A, AAAA and CNAME
-- Needs some unit tests
-- Add GitHub actions
+- More GitHub actions
+  - Relase pipeline

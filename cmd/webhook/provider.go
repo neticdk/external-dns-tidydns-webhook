@@ -24,9 +24,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/neticdk/external-dns-tidydns-webhook/cmd/webhook/tidydns"
-	"golang.org/x/exp/utf8string"
 	"golang.org/x/net/idna"
 	"sigs.k8s.io/external-dns/endpoint"
 	"sigs.k8s.io/external-dns/plan"
@@ -40,20 +40,20 @@ type tidyProvider struct {
 
 type Provider = provider.Provider
 type Endpoint = endpoint.Endpoint
-type ProviderSpecific = endpoint.ProviderSpecific
 type tidyRecord = tidydns.Record
 
-const annotationKey = "webhook/tidy-description"
+func newProvider(tidy tidydns.TidyDNSClient, zoneUpdateInterval time.Duration) *tidyProvider {
+	// Make zoneprovider to fetch the zone information with at the set interval
+	zoneProvider := newZoneProvider(tidy, zoneUpdateInterval)
 
-func newProvider(tidy tidydns.TidyDNSClient, zoneProvider ZoneProvider) (*tidyProvider, error) {
 	return &tidyProvider{
 		tidy:         tidy,
 		zoneProvider: zoneProvider,
-	}, nil
+	}
 }
 
 // Get list of zones from Tidy and return a domain filter based on them.
-func (p *tidyProvider) GetDomainFilter() endpoint.DomainFilter {
+func (p *tidyProvider) GetDomainFilter() endpoint.DomainFilterInterface {
 	// Make list of all zone names
 	zoneNames := []string{}
 	for _, zone := range p.zoneProvider.getZones() {
@@ -72,13 +72,14 @@ func (p *tidyProvider) GetDomainFilter() endpoint.DomainFilter {
 func (p *tidyProvider) Records(ctx context.Context) ([]*Endpoint, error) {
 	allRecords, err := p.allRecords()
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
 	endpoints := []*Endpoint{}
 
 	for _, record := range allRecords {
-		endpoint := p.parseTidyRecord(&record)
+		endpoint := parseTidyRecord(&record)
 		if endpoint == nil {
 			continue
 		}
@@ -109,29 +110,13 @@ func (p *tidyProvider) Records(ctx context.Context) ([]*Endpoint, error) {
 func (p *tidyProvider) AdjustEndpoints(endpoints []*Endpoint) ([]*Endpoint, error) {
 	for _, v := range endpoints {
 		// Restrict TTL to permitted range by Tidy DNS
-		v.RecordTTL = endpoint.TTL(restrictTTL(int(v.RecordTTL)))
+		v.RecordTTL = endpoint.TTL(clampTTL(int(v.RecordTTL)))
 
 		// Labels are not supported hence removed
 		v.Labels = endpoint.Labels{}
 
 		// Any unicode is encoded as punycode
 		v.DNSName, _ = idna.Lookup.ToASCII(v.DNSName)
-
-		// The only supported ProviderSpecific is the one given by the
-		// annotationKey parameter that is used as a record description
-		ps := v.ProviderSpecific
-		v.ProviderSpecific = ProviderSpecific{}
-		for i := range ps {
-			if ps[i].Name == annotationKey {
-				unicodeComment := utf8string.NewString(ps[i].Value)
-				if unicodeComment.RuneCount() >= 1024 {
-					slog.Warn("comment to long on endpoint" + v.DNSName)
-					continue
-				}
-
-				v.ProviderSpecific = ProviderSpecific{ps[i]}
-			}
-		}
 	}
 
 	return endpoints, nil
@@ -156,6 +141,7 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 
 	allRecords, err := p.allRecords()
 	if err != nil {
+		slog.Error(err.Error())
 		return err
 	}
 
@@ -168,11 +154,7 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 	}
 
 	for _, old := range changes.UpdateOld {
-		wg.Add(1)
-		func() {
-			defer wg.Done()
-			p.deleteEndpoint(allRecords, old)
-		}()
+		p.deleteEndpoint(allRecords, old)
 	}
 
 	for _, new := range changes.UpdateNew {
@@ -188,51 +170,11 @@ func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) 
 	return nil
 }
 
-// Convert a Tidy record into an External-DNS endpoint. This potentially changes
-// the TTL, the content of a TXT record and the DNS name.
-func (p *tidyProvider) parseTidyRecord(record *tidyRecord) *Endpoint {
-	// Convert DNS name into a FQDN
-	var dnsName string
-	if record.Name == "." {
-		dnsName = record.ZoneName
-	} else {
-		dnsName = record.Name + "." + record.ZoneName
-	}
-
-	if dnsName == "" {
-		return nil
-	}
-
-	ttlTemp, err := record.TTL.Int64()
-	if err != nil {
-		slog.Warn(err.Error())
-		return nil
-	}
-
-	// Convert TTL to TTL type
-	ttl := endpoint.TTL(ttlTemp)
-
-	// Convert description into the ProviderSpec
-	providerSpec := p.descriptionToProviderSpec(record.Description)
-
-	if record.Type == "CNAME" {
-		record.Destination = strings.TrimRight(record.Destination, ".")
-	}
-
-	// Create Endpoint
-	endpoint := endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
-	endpoint.ProviderSpecific = providerSpec
-
-	return endpoint
-}
-
 // Fetch and create a list of all records from all zones
 func (p *tidyProvider) allRecords() ([]tidyRecord, error) {
-	zones := p.zoneProvider.getZones()
-
 	allRecords := []tidyRecord{}
 
-	for _, zone := range zones {
+	for _, zone := range p.zoneProvider.getZones() {
 		records, err := p.tidy.ListRecords(zone.ID)
 		if err != nil {
 			return nil, err
@@ -244,40 +186,25 @@ func (p *tidyProvider) allRecords() ([]tidyRecord, error) {
 	return allRecords, nil
 }
 
+// Find all matching records from a list and delete them. Since one endpoint can
+// have multiple targets an endpoint can represent multiple records in Tidy.
 func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoint) {
-	foundRecords := p.findRecords(allRecords, endpoint)
-	if len(foundRecords) == 0 {
-		return
-	}
-
-	for _, record := range foundRecords {
-		slog.Debug(fmt.Sprintf("delete record %+v", record))
-		if err := p.tidy.DeleteRecord(record.ZoneID, record.ID); err != nil {
-			return
-		}
-	}
-}
-
-// Find all matching records from a list. Since one endpoint cam have multiple
-// targets they can represent multiple records in Tidy.
-func (p *tidyProvider) findRecords(records []tidyRecord, endpoint *Endpoint) []tidyRecord {
-	found := []tidydns.Record{}
 	for _, target := range endpoint.Targets {
-		for _, record := range records {
-			dnsName := ""
-			if record.Name == "." {
-				dnsName = record.ZoneName
-			} else {
-				dnsName = record.Name + "." + record.ZoneName
+		for _, record := range allRecords {
+			dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
+
+			if dnsName != endpoint.DNSName || record.Type != endpoint.RecordType || record.Destination != target {
+				continue
 			}
 
-			if dnsName == endpoint.DNSName && record.Type == endpoint.RecordType && record.Destination == target {
-				found = append(found, record)
+			slog.Debug(fmt.Sprintf("delete record %+v", record))
+			err := p.tidy.DeleteRecord(record.ZoneID, record.ID)
+			if err != nil {
+				slog.Error(err.Error())
+				return
 			}
 		}
 	}
-
-	return found
 }
 
 // Create record(s) from an External-DNS endpoint. As endpoints can have
@@ -290,8 +217,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 		return
 	}
 
-	ttl := restrictTTL(int(endpoint.RecordTTL))
-	description := p.providerSpecToDescription(endpoint.ProviderSpecific)
+	ttl := clampTTL(int(endpoint.RecordTTL))
 
 	for _, target := range endpoint.Targets {
 		// For some reason external-dns wraps the value of certain TXT records
@@ -307,7 +233,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 		newRec := &tidyRecord{
 			Type:        endpoint.RecordType,
 			Name:        dnsName,
-			Description: description,
+			Description: "",
 			Destination: target,
 			TTL:         json.Number(strconv.Itoa(ttl)),
 		}
@@ -321,35 +247,41 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 	}
 }
 
-// Convert providerSpec to description
-func (p *tidyProvider) providerSpecToDescription(providerSpec ProviderSpecific) string {
-	for _, ps := range providerSpec {
-		if ps.Name == annotationKey {
-			return ps.Value
-		}
+// Convert a Tidy record into an External-DNS endpoint. This potentially changes
+// the TTL, the content of a TXT record and the DNS name.
+func parseTidyRecord(record *tidyRecord) *Endpoint {
+	// Convert DNS name into a FQDN
+	dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
+
+	ttlTemp, err := record.TTL.Int64()
+	if err != nil {
+		slog.Error(err.Error())
+		return nil
 	}
 
-	return ""
+	// Convert TTL to TTL type
+	ttl := endpoint.TTL(ttlTemp)
+
+	if record.Type == "CNAME" {
+		record.Destination = strings.TrimRight(record.Destination, ".")
+	}
+
+	// Create Endpoint
+	return endpoint.NewEndpointWithTTL(dnsName, record.Type, ttl, record.Destination)
 }
 
-// Convert description to providerSpec
-func (p *tidyProvider) descriptionToProviderSpec(description string) ProviderSpecific {
-	if description == "" {
-		return ProviderSpecific{}
+func tidyNameToFQDN(name, zone string) string {
+	if name == "." {
+		return zone
 	}
 
-	return ProviderSpecific{
-		{
-			Name:  annotationKey,
-			Value: description,
-		},
-	}
+	return name + "." + zone
 }
 
 // Handles sanitizing TTL to Tidy. TidyDNS doesn't support TTL under 300 except
 // 0 which is the namespace default value
-func restrictTTL(ttl int) int {
-	if ttl != 0 && ttl < 300 {
+func clampTTL(ttl int) int {
+	if ttl > 0 && ttl < 300 {
 		return 300
 	}
 

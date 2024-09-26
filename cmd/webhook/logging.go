@@ -17,8 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"io"
 	"log/slog"
-	"os"
 )
 
 const defaultLogLevel = slog.LevelInfo
@@ -27,21 +27,28 @@ const defaultLogLevel = slog.LevelInfo
 // one of (debug, info, warn, error), an out file where the log will be printet
 // to and the addSource boolean which when true will cause slog to print the
 // func, file and sourceline of the log call.
-func loggingSetup(lvl string, out *os.File, addSource bool) *slog.Logger {
+func loggingSetup(logFormat, logLevel string, out io.Writer, addSource bool) *slog.Logger {
 	programLevel := new(slog.LevelVar)
 	handlerOpts := slog.HandlerOptions{
 		Level:     programLevel,
 		AddSource: addSource,
 	}
 
-	logger := slog.New(slog.NewJSONHandler(out, &handlerOpts))
+	var h slog.Handler
+	if logFormat == "json" {
+		h = slog.NewJSONHandler(out, &handlerOpts)
+	} else {
+		h = slog.NewTextHandler(out, &handlerOpts)
+	}
+
+	logger := slog.New(h)
 	slog.SetDefault(logger)
 
-	if err := programLevel.UnmarshalText([]byte(lvl)); err != nil {
+	if err := programLevel.UnmarshalText([]byte(logLevel)); err != nil {
 		logger.Error(err.Error())
 		programLevel.Set(defaultLogLevel)
 	}
 
-	slog.Debug("loglevel set to: " + programLevel.Level().String())
+	slog.Debug("using loglevel " + programLevel.Level().String())
 	return logger
 }

@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -78,8 +77,6 @@ const (
 )
 
 func NewTidyDnsClient(baseURL, username, password string, timeout time.Duration, meter otel.Meter) (TidyDNSClient, error) {
-	slog.Debug("baseURL set to: " + baseURL + " with " + timeout.String() + " timeout")
-
 	counter, err := counterProvider(meter, "tidy_requests", ("Requtest made to " + baseURL))
 	if err != nil {
 		return nil, err
@@ -137,7 +134,6 @@ func (c *tidyDNSClient) DeleteRecord(zoneID json.Number, recordID json.Number) e
 }
 
 func (c *tidyDNSClient) request(method, url string, value io.Reader, resp any) error {
-	slog.Debug(method + " " + c.baseURL + url)
 	req, err := http.NewRequest(method, (c.baseURL + url), value)
 	if err != nil {
 		return err
