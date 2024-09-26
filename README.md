@@ -82,7 +82,5 @@ go build cmd/webhook/
   [tidydns-go](https://github.com/neticdk/tidydns-go) instead of the local
   tidydns package
 - So far the record types are A, AAAA and CNAME
-- Needs some unit tests
 - More GitHub actions
-  - Unit tests
   - Relase pipeline
