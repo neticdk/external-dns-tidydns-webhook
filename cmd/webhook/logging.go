@@ -23,32 +23,41 @@ import (
 
 const defaultLogLevel = slog.LevelInfo
 
-// Set up logging with slog using JSON format. Take a level string the can be
-// one of (debug, info, warn, error), an out file where the log will be printet
-// to and the addSource boolean which when true will cause slog to print the
-// func, file and sourceline of the log call.
+// loggingSetup sets up logging with slog.
+//
+// Parameters:
+//   - logFormat: A string specifying the log format ("logfmt" or "json").
+//   - logLevel: A string specifying the log level ("debug", "info", "warn",
+//     "error").
+//   - out: An io.Writer where the log will be printed to (e.g. os.Stderr).
+//   - addSource: A boolean which, when true, will cause slog to print the
+//     function, file, and source line of the log call.
 func loggingSetup(logFormat, logLevel string, out io.Writer, addSource bool) *slog.Logger {
-	programLevel := new(slog.LevelVar)
+	logLeveller := new(slog.LevelVar)
 	handlerOpts := slog.HandlerOptions{
-		Level:     programLevel,
+		Level:     logLeveller,
 		AddSource: addSource,
 	}
 
 	var h slog.Handler
-	if logFormat == "json" {
+	switch logFormat {
+	case "json":
 		h = slog.NewJSONHandler(out, &handlerOpts)
-	} else {
+	case "logfmt":
 		h = slog.NewTextHandler(out, &handlerOpts)
+	default:
+		// Default to JSON
+		h = slog.NewJSONHandler(out, &handlerOpts)
 	}
 
 	logger := slog.New(h)
 	slog.SetDefault(logger)
 
-	if err := programLevel.UnmarshalText([]byte(logLevel)); err != nil {
+	if err := logLeveller.UnmarshalText([]byte(logLevel)); err != nil {
 		logger.Error(err.Error())
-		programLevel.Set(defaultLogLevel)
+		logLeveller.Set(defaultLogLevel)
 	}
 
-	slog.Debug("using loglevel " + programLevel.Level().String())
+	slog.Debug("using loglevel " + logLeveller.Level().String())
 	return logger
 }
