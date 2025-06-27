@@ -4,11 +4,11 @@ github.com/alecthomas/kingpin/v2
 # github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137
 ## explicit; go 1.15
 github.com/alecthomas/units
-# github.com/aws/aws-sdk-go-v2/service/route53 v1.51.1
+# github.com/aws/aws-sdk-go-v2/service/route53 v1.52.2
 ## explicit; go 1.22
 github.com/aws/aws-sdk-go-v2/service/route53/types
-# github.com/aws/smithy-go v1.22.2
-## explicit; go 1.21
+# github.com/aws/smithy-go v1.22.4
+## explicit; go 1.22
 github.com/aws/smithy-go
 github.com/aws/smithy-go/document
 # github.com/beorn7/perks v1.0.1
@@ -17,9 +17,6 @@ github.com/beorn7/perks/quantile
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/fxamacker/cbor/v2 v2.7.0
-## explicit; go 1.17
-github.com/fxamacker/cbor/v2
 # github.com/go-logr/logr v1.4.3
 ## explicit; go 1.18
 github.com/go-logr/logr
@@ -27,10 +24,6 @@ github.com/go-logr/logr/funcr
 # github.com/go-logr/stdr v1.2.2
 ## explicit; go 1.16
 github.com/go-logr/stdr
-# github.com/gogo/protobuf v1.3.2
-## explicit; go 1.15
-github.com/gogo/protobuf/proto
-github.com/gogo/protobuf/sortkeys
 # github.com/google/go-cmp v0.7.0
 ## explicit; go 1.21
 github.com/google/go-cmp/cmp
@@ -41,15 +34,6 @@ github.com/google/go-cmp/cmp/internal/value
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
-# github.com/json-iterator/go v1.1.12
-## explicit; go 1.12
-github.com/json-iterator/go
-# github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
-## explicit
-github.com/modern-go/concurrent
-# github.com/modern-go/reflect2 v1.0.2
-## explicit; go 1.12
-github.com/modern-go/reflect2
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
@@ -76,9 +60,6 @@ github.com/prometheus/procfs/internal/util
 # github.com/sirupsen/logrus v1.9.3
 ## explicit; go 1.13
 github.com/sirupsen/logrus
-# github.com/x448/float16 v0.8.4
-## explicit; go 1.11
-github.com/x448/float16
 # github.com/xhit/go-str2duration/v2 v2.1.0
 ## explicit; go 1.13
 github.com/xhit/go-str2duration/v2
@@ -128,11 +109,7 @@ go.opentelemetry.io/otel/trace/internal/telemetry
 go.opentelemetry.io/otel/trace/noop
 # golang.org/x/net v0.41.0
 ## explicit; go 1.23.0
-golang.org/x/net/http/httpguts
-golang.org/x/net/http2
-golang.org/x/net/http2/hpack
 golang.org/x/net/idna
-golang.org/x/net/internal/httpcommon
 # golang.org/x/sys v0.33.0
 ## explicit; go 1.23.0
 golang.org/x/sys/unix
@@ -175,35 +152,14 @@ google.golang.org/protobuf/reflect/protoregistry
 google.golang.org/protobuf/runtime/protoiface
 google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/timestamppb
-# gopkg.in/inf.v0 v0.9.1
-## explicit
-gopkg.in/inf.v0
-# k8s.io/apimachinery v0.33.0
+# k8s.io/apimachinery v0.33.2
 ## explicit; go 1.24.0
-k8s.io/apimachinery/pkg/api/operation
-k8s.io/apimachinery/pkg/api/resource
-k8s.io/apimachinery/pkg/apis/meta/v1
-k8s.io/apimachinery/pkg/conversion
-k8s.io/apimachinery/pkg/conversion/queryparams
-k8s.io/apimachinery/pkg/fields
 k8s.io/apimachinery/pkg/labels
-k8s.io/apimachinery/pkg/runtime
-k8s.io/apimachinery/pkg/runtime/schema
-k8s.io/apimachinery/pkg/runtime/serializer/cbor/direct
-k8s.io/apimachinery/pkg/runtime/serializer/cbor/internal/modes
 k8s.io/apimachinery/pkg/selection
-k8s.io/apimachinery/pkg/types
 k8s.io/apimachinery/pkg/util/errors
-k8s.io/apimachinery/pkg/util/intstr
-k8s.io/apimachinery/pkg/util/json
-k8s.io/apimachinery/pkg/util/naming
-k8s.io/apimachinery/pkg/util/net
-k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/sets
 k8s.io/apimachinery/pkg/util/validation
 k8s.io/apimachinery/pkg/util/validation/field
-k8s.io/apimachinery/pkg/watch
-k8s.io/apimachinery/third_party/forked/golang/reflect
 # k8s.io/klog/v2 v2.130.1
 ## explicit; go 1.18
 k8s.io/klog/v2
@@ -217,8 +173,7 @@ k8s.io/klog/v2/internal/sloghandler
 ## explicit; go 1.18
 k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
-k8s.io/utils/ptr
-# sigs.k8s.io/external-dns v0.17.0
+# sigs.k8s.io/external-dns v0.18.0
 ## explicit; go 1.24.2
 sigs.k8s.io/external-dns/endpoint
 sigs.k8s.io/external-dns/pkg/apis/externaldns
@@ -226,17 +181,3 @@ sigs.k8s.io/external-dns/pkg/metrics
 sigs.k8s.io/external-dns/plan
 sigs.k8s.io/external-dns/provider
 sigs.k8s.io/external-dns/provider/webhook/api
-# sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
-## explicit; go 1.23
-sigs.k8s.io/json
-sigs.k8s.io/json/internal/golang/encoding/json
-# sigs.k8s.io/randfill v1.0.0
-## explicit; go 1.18
-sigs.k8s.io/randfill
-sigs.k8s.io/randfill/bytesource
-# sigs.k8s.io/structured-merge-diff/v4 v4.7.0
-## explicit; go 1.13
-sigs.k8s.io/structured-merge-diff/v4/value
-# sigs.k8s.io/yaml v1.4.0
-## explicit; go 1.12
-sigs.k8s.io/yaml/goyaml.v2
