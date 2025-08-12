@@ -23,8 +23,8 @@ func TestLoggingSetup(t *testing.T) {
 			expectText: `"level":"INFO"`,
 		},
 		{
-			name:       "Text format with debug level",
-			logFormat:  "text",
+			name:       "Logfmt format with debug level",
+			logFormat:  "logfmt",
 			logLevel:   "debug",
 			addSource:  false,
 			expectErr:  false,
@@ -67,7 +67,7 @@ func TestLoggingSetupWithSource(t *testing.T) {
 	var buf bytes.Buffer
 	out := &buf
 
-	logger := loggingSetup("text", "info", out, true)
+	logger := loggingSetup("logfmt", "info", out, true)
 	logger.Info("test log with source")
 
 	logOutput := buf.String()
