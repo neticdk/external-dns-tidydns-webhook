@@ -47,7 +47,7 @@ func main() {
 	cfg, parsingErr := parseConfig()
 
 	// Setup the default slog logger
-	loggingSetup(cfg.logFormat, cfg.logLevel, os.Stderr, true)
+	loggingSetup(cfg.logFormat, cfg.logLevel, os.Stdout, true)
 
 	// External DNS uses logrus for logging, so we set that up as well
 	if cfg.logFormat == "json" {
