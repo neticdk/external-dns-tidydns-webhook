@@ -47,12 +47,17 @@ func main() {
 	cfg, parsingErr := parseConfig()
 
 	// Setup the default slog logger
-	loggingSetup(cfg.logFormat, cfg.logLevel, os.Stderr, true)
+	loggingSetup(cfg.logFormat, cfg.logLevel, os.Stdout, true)
 
 	// External DNS uses logrus for logging, so we set that up as well
-	if cfg.logFormat == "json" {
+	switch cfg.logFormat {
+	case "json":
 		log.SetFormatter(&log.JSONFormatter{})
-	} else {
+	case "logfmt":
+		log.SetFormatter(&log.TextFormatter{})
+	default:
+		msg := fmt.Sprintf("Invalid log format '%s' specified. Defaulting to logfmt", cfg.logFormat)
+		slog.Info(msg)
 		log.SetFormatter(&log.TextFormatter{})
 	}
 
@@ -103,7 +108,7 @@ func main() {
 
 func parseConfig() (*config, error) {
 	logLevel := flag.String("log-level", "info", "Set the level of logging. (default: info, options: debug, info, warning, error)")
-	logFormat := flag.String("log-format", "text", "The format in which log messages are printed (default: text, options: text, json)")
+	logFormat := flag.String("log-format", "logfmt", "The format in which log messages are printed (default: logfmt, options: logfmt, json)")
 	tidyEndpoint := flag.String("tidydns-endpoint", "", "DNS server address")
 	readTimeout := flag.Duration("read-timeout", (5 * time.Second), "Read timeout in duration format (default: 5s)")
 	writeTimeout := flag.Duration("write-timeout", (10 * time.Second), "Write timeout in duration format (default: 10s)")

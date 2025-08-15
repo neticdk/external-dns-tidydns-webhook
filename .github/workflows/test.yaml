@@ -12,7 +12,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
-          go-version: '^1.23.1'
+          # get the latest stable version from the go-versions repository
+          # manifest:
+          # https://github.com/actions/go-versions/blob/main/versions-manifest.json
+          go-version: 'stable'
 
       - name: Build
         run: go build ./...

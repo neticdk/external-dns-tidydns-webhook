@@ -36,7 +36,7 @@ func TestParseConfig(t *testing.T) {
 			envPass: "testpass",
 			expectedConfig: &config{
 				logLevel:           "info",
-				logFormat:          "text",
+				logFormat:          "logfmt",
 				tidyEndpoint:       "",
 				readTimeout:        5 * time.Second,
 				writeTimeout:       10 * time.Second,
