@@ -106,7 +106,7 @@ func (p *tidyProvider) Records(ctx context.Context) ([]*Endpoint, error) {
 // exceptions are made like not using the FQDN and a multi-target endpoint being
 // multiple records. Theese changes are invisible to External-DNS. However
 // things like the TTL restrictions, labels not being supported and unicode
-// being punycode encoded is applied in this function.
+// being punycode encoded, is applied in this function.
 func (p *tidyProvider) AdjustEndpoints(endpoints []*Endpoint) ([]*Endpoint, error) {
 	for _, v := range endpoints {
 		// Restrict TTL to permitted range by Tidy DNS
@@ -125,7 +125,7 @@ func (p *tidyProvider) AdjustEndpoints(endpoints []*Endpoint) ([]*Endpoint, erro
 // Create, delete or change records. We use a list of zones since External-DNS
 // doesn't know and we need the zone name to adjust DNS name and zoneID to apply
 // changes in Tidy. It's assumed that update_old and update_new has equal number
-// of entries. Instead of changing records in-place, old records and simly
+// of entries. Instead of changing records in-place, old records and simply
 // deleted and their corrections are created as new records.
 func (p *tidyProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) error {
 	zones := p.zoneProvider.getZones()
@@ -190,6 +190,7 @@ func (p *tidyProvider) allRecords() ([]tidyRecord, error) {
 // have multiple targets an endpoint can represent multiple records in Tidy.
 func (p *tidyProvider) deleteEndpoint(allRecords []tidyRecord, endpoint *Endpoint) {
 	for _, target := range endpoint.Targets {
+		target = tidyfyTarget(target)
 		for _, record := range allRecords {
 			dnsName := tidyNameToFQDN(record.Name, record.ZoneName)
 
@@ -220,11 +221,7 @@ func (p *tidyProvider) createRecord(zones []tidydns.Zone, endpoint *Endpoint) {
 	ttl := clampTTL(int(endpoint.RecordTTL))
 
 	for _, target := range endpoint.Targets {
-		// For some reason external-dns wraps the value of certain TXT records
-		// with extra double quotes. This isn't supported by Tidy and it will
-		// refuse to save and removing them seemingly causes no issues for
-		// external-dns when read back.
-		target = strings.Trim(target, "\"")
+		target = tidyfyTarget(target)
 
 		if endpoint.RecordType == "CNAME" {
 			target += "."
@@ -306,4 +303,12 @@ func tidyfyName(zones []tidydns.Zone, name string) (string, json.Number) {
 	}
 
 	return "", "0"
+}
+
+// For some reason external-dns wraps the value of certain TXT records
+// with extra double quotes. This isn't supported by Tidy and it will
+// refuse to save. Removing them seemingly causes no issues for
+// external-dns when read back.
+func tidyfyTarget(target string) string {
+	return strings.Trim(target, "\"")
 }
