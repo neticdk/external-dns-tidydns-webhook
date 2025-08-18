@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1@sha256:38387523653efa0039f8e1c89bb74a30504e76ee9f565e25c9a09841f9427b05
 
-FROM golang:alpine@sha256:244baa35bcfaf9a5b3444519df6d42554a1f92dc33820bd98f0662df270d8a6a AS builder
+FROM golang:alpine@sha256:f18a072054848d87a8077455f0ac8a25886f2397f88bfdd222d6fafbb5bba440 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
