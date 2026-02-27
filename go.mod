@@ -9,7 +9,7 @@ require (
 	go.opentelemetry.io/otel/exporters/prometheus v0.62.0
 	go.opentelemetry.io/otel/metric v1.40.0
 	go.opentelemetry.io/otel/sdk/metric v1.40.0
-	golang.org/x/net v0.50.0
+	golang.org/x/net v0.51.0
 	sigs.k8s.io/external-dns v0.20.0
 )
 
