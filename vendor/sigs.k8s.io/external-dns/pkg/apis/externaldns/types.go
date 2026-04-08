@@ -18,24 +18,28 @@ package externaldns
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/rest"
+
+	"sigs.k8s.io/external-dns/internal/flags"
 
 	"sigs.k8s.io/external-dns/endpoint"
 	"sigs.k8s.io/external-dns/source/annotations"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 const (
-	passwordMask = "******"
+	passwordMask  = "******"
+	LogFormatText = "text"
+	LogFormatJSON = "json"
 )
 
 // Config is a project-wide configuration
@@ -43,6 +47,9 @@ type Config struct {
 	APIServerURL                                  string
 	KubeConfig                                    string
 	RequestTimeout                                time.Duration
+	KubeAPIRequestTimeout                         time.Duration
+	KubeAPIQPS                                    int
+	KubeAPIBurst                                  int
 	DefaultTargets                                []string
 	GlooNamespaces                                []string
 	SkipperRouteGroupVersion                      string
@@ -53,6 +60,8 @@ type Config struct {
 	LabelFilter                                   string
 	IngressClassNames                             []string
 	FQDNTemplate                                  string
+	TargetTemplate                                string
+	FQDNTargetTemplate                            string
 	CombineFQDNAndAnnotation                      bool
 	IgnoreHostnameAnnotation                      bool
 	IgnoreNonHostNetworkPods                      bool
@@ -63,6 +72,7 @@ type Config struct {
 	GatewayName                                   string
 	GatewayNamespace                              string
 	GatewayLabelFilter                            string
+	GatewayListenerSets                           bool
 	Compatibility                                 string
 	PodSourceDomain                               string
 	PublishInternal                               bool
@@ -71,14 +81,15 @@ type Config struct {
 	ConnectorSourceServer                         string
 	Provider                                      string
 	ProviderCacheTime                             time.Duration
+	CreatePTR                                     bool
 	GoogleProject                                 string
 	GoogleBatchChangeSize                         int
 	GoogleBatchChangeInterval                     time.Duration
 	GoogleZoneVisibility                          string
 	DomainFilter                                  []string
-	ExcludeDomains                                []string
+	DomainExclude                                 []string
 	RegexDomainFilter                             *regexp.Regexp
-	RegexDomainExclusion                          *regexp.Regexp
+	RegexDomainExclude                            *regexp.Regexp
 	ZoneNameFilter                                []string
 	ZoneIDFilter                                  []string
 	TargetNetFilter                               []string
@@ -110,6 +121,8 @@ type Config struct {
 	AzureActiveDirectoryAuthorityHost             string
 	AzureZonesCacheDuration                       time.Duration
 	AzureMaxRetriesCount                          int
+	BatchChangeSize                               int
+	BatchChangeInterval                           time.Duration
 	CloudflareProxied                             bool
 	CloudflareCustomHostnames                     bool
 	CloudflareDNSRecordsPerPage                   int
@@ -119,6 +132,7 @@ type Config struct {
 	CloudflareRegionalServices                    bool
 	CloudflareRegionKey                           string
 	CoreDNSPrefix                                 string
+	CoreDNSStrictlyOwned                          bool
 	AkamaiServiceConsumerDomain                   string
 	AkamaiClientToken                             string
 	AkamaiClientSecret                            string
@@ -168,16 +182,12 @@ type Config struct {
 	CRDSourceAPIVersion                           string
 	CRDSourceKind                                 string
 	ServiceTypeFilter                             []string
-	CFAPIEndpoint                                 string
-	CFUsername                                    string
-	CFPassword                                    string
 	ResolveServiceLoadBalancerHostname            bool
 	RFC2136Host                                   []string
 	RFC2136Port                                   int
 	RFC2136Zone                                   []string
 	RFC2136Insecure                               bool
 	RFC2136GSSTSIG                                bool
-	RFC2136CreatePTR                              bool
 	RFC2136KerberosRealm                          string
 	RFC2136KerberosUsername                       string
 	RFC2136KerberosPassword                       string `secure:"yes"`
@@ -195,7 +205,6 @@ type Config struct {
 	NS1MinTTLSeconds                              int
 	TransIPAccountName                            string
 	TransIPPrivateKeyFile                         string
-	DigitalOceanAPIPageSize                       int
 	ManagedDNSRecordTypes                         []string
 	ExcludeDNSRecordTypes                         []string
 	GoDaddyAPIKey                                 string `secure:"yes"`
@@ -219,6 +228,8 @@ type Config struct {
 	ExcludeUnschedulable                          bool
 	EmitEvents                                    []string
 	ForceDefaultTargets                           bool
+	UnstructuredResources                         []string
+	PreferAlias                                   bool
 }
 
 var defaultConfig = &Config{
@@ -254,9 +265,8 @@ var defaultConfig = &Config{
 	AzureSubscriptionID:         "",
 	AzureZonesCacheDuration:     0 * time.Second,
 	AzureMaxRetriesCount:        3,
-	CFAPIEndpoint:               "",
-	CFPassword:                  "",
-	CFUsername:                  "",
+	BatchChangeSize:             200,
+	BatchChangeInterval:         time.Second,
 	CloudflareCustomHostnamesCertificateAuthority: "none",
 	CloudflareCustomHostnames:                     false,
 	CloudflareCustomHostnamesMinTLSVersion:        "1.0",
@@ -269,14 +279,14 @@ var defaultConfig = &Config{
 	Compatibility:                "",
 	ConnectorSourceServer:        "localhost:8080",
 	CoreDNSPrefix:                "/skydns/",
+	CoreDNSStrictlyOwned:         false,
 	CRDSourceAPIVersion:          "externaldns.k8s.io/v1alpha1",
 	CRDSourceKind:                "DNSEndpoint",
 	DefaultTargets:               []string{},
-	DigitalOceanAPIPageSize:      50,
 	DomainFilter:                 []string{},
 	DryRun:                       false,
 	ExcludeDNSRecordTypes:        []string{},
-	ExcludeDomains:               []string{},
+	DomainExclude:                []string{},
 	ExcludeTargetNets:            []string{},
 	EmitEvents:                   []string{},
 	ExcludeUnschedulable:         true,
@@ -286,6 +296,8 @@ var defaultConfig = &Config{
 	ExoscaleAPIZone:              "ch-gva-2",
 	ExposeInternalIPV6:           false,
 	FQDNTemplate:                 "",
+	TargetTemplate:               "",
+	FQDNTargetTemplate:           "",
 	GatewayLabelFilter:           "",
 	GatewayName:                  "",
 	GatewayNamespace:             "",
@@ -311,6 +323,7 @@ var defaultConfig = &Config{
 	ManagedDNSRecordTypes:        []string{endpoint.RecordTypeA, endpoint.RecordTypeAAAA, endpoint.RecordTypeCNAME},
 	MetricsAddress:               ":7979",
 	MinEventSyncInterval:         5 * time.Second,
+	MinTTL:                       0,
 	Namespace:                    "",
 	NAT64Networks:                []string{},
 	NS1Endpoint:                  "",
@@ -336,12 +349,16 @@ var defaultConfig = &Config{
 	Policy:                       "sync",
 	Provider:                     "",
 	ProviderCacheTime:            0,
+	CreatePTR:                    false,
 	PublishHostIP:                false,
 	PublishInternal:              false,
-	RegexDomainExclusion:         regexp.MustCompile(""),
+	RegexDomainExclude:           regexp.MustCompile(""),
 	RegexDomainFilter:            regexp.MustCompile(""),
-	Registry:                     "txt",
+	Registry:                     RegistryTXT,
 	RequestTimeout:               time.Second * 30,
+	KubeAPIRequestTimeout:        time.Second * 30,
+	KubeAPIQPS:                   int(rest.DefaultQPS),
+	KubeAPIBurst:                 rest.DefaultBurst,
 	RFC2136BatchChangeSize:       50,
 	RFC2136GSSTSIG:               false,
 	RFC2136Host:                  []string{""},
@@ -385,38 +402,39 @@ var defaultConfig = &Config{
 	WebhookServer:                false,
 	ZoneIDFilter:                 []string{},
 	ForceDefaultTargets:          false,
+	UnstructuredResources:        []string{},
+	PreferAlias:                  false,
 }
 
-var providerNames = []string{
-	"akamai",
-	"alibabacloud",
-	"aws",
-	"aws-sd",
-	"azure",
-	"azure-dns",
-	"azure-private-dns",
-	"civo",
-	"cloudflare",
-	"coredns",
-	"digitalocean",
-	"dnsimple",
-	"exoscale",
-	"gandi",
-	"godaddy",
-	"google",
-	"inmemory",
-	"linode",
-	"ns1",
-	"oci",
-	"ovh",
-	"pdns",
-	"pihole",
-	"plural",
-	"rfc2136",
-	"scaleway",
-	"skydns",
-	"transip",
-	"webhook",
+var ProviderNames = []string{
+	ProviderAkamai,
+	ProviderAlibabaCloud,
+	ProviderAWS,
+	ProviderAWSSD,
+	ProviderAzure,
+	ProviderAzureDNS,
+	ProviderAzurePrivate,
+	ProviderCivo,
+	ProviderCloudflare,
+	ProviderCoreDNS,
+	ProviderDNSimple,
+	ProviderExoscale,
+	ProviderGandi,
+	ProviderGoDaddy,
+	ProviderGoogle,
+	ProviderInMemory,
+	ProviderLinode,
+	ProviderNS1,
+	ProviderOCI,
+	ProviderOVH,
+	ProviderPDNS,
+	ProviderPihole,
+	ProviderPlural,
+	ProviderRFC2136,
+	ProviderScaleway,
+	ProviderSkyDNS,
+	ProviderTransip,
+	ProviderWebhook,
 }
 
 var allowedSources = []string{
@@ -431,7 +449,6 @@ var allowedSources = []string{
 	"gateway-udproute",
 	"istio-gateway",
 	"istio-virtualservice",
-	"cloudfoundry",
 	"contour-httpproxy",
 	"gloo-proxy",
 	"fake",
@@ -445,6 +462,7 @@ var allowedSources = []string{
 	"f5-virtualserver",
 	"f5-transportserver",
 	"traefik-proxy",
+	"unstructured",
 }
 
 // NewConfig returns new Config object
@@ -459,13 +477,10 @@ func (cfg *Config) String() string {
 	// prevent logging of sensitive information
 	temp := *cfg
 
-	t := reflect.TypeOf(temp)
+	t := reflect.TypeFor[Config]()
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if val, ok := f.Tag.Lookup("secure"); ok && val == "yes" {
-			if f.Type.Kind() != reflect.String {
-				continue
-			}
 			v := reflect.ValueOf(&temp).Elem().Field(i)
 			if v.String() != "" {
 				v.SetString(passwordMask)
@@ -487,120 +502,34 @@ func allLogLevelsAsStrings() []string {
 
 // ParseFlags adds and parses flags from command line
 func (cfg *Config) ParseFlags(args []string) error {
-	backend := ""
-	pruned := make([]string, 0, len(args))
-	skipNext := false
-	for i := 0; i < len(args); i++ {
-		if skipNext {
-			skipNext = false
-			continue
-		}
-		a := args[i]
-		if strings.HasPrefix(a, "--cli-backend") {
-			val := ""
-			if a == "--cli-backend" {
-				if i+1 < len(args) {
-					val = args[i+1]
-					skipNext = true
-				}
-			} else if strings.HasPrefix(a, "--cli-backend=") {
-				val = strings.TrimPrefix(a, "--cli-backend=")
-			}
-			if val != "" {
-				backend = val
-			}
-			continue
-		}
-		pruned = append(pruned, a)
-	}
-	if backend == "" {
-		backend = os.Getenv("EXTERNAL_DNS_CLI")
-	}
-	if strings.EqualFold(backend, "cobra") {
-		cmd := newCobraCommand(cfg)
-		cmd.SetArgs(pruned)
-		if err := cmd.Execute(); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	app := App(cfg)
-	_, err := app.Parse(pruned)
-	if err != nil {
+	if _, err := App(cfg).Parse(args); err != nil {
 		return err
 	}
-
+	cfg.resolveDeprecatedFlags()
 	return nil
 }
 
-func newCobraCommand(cfg *Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:           "external-dns",
-		Short:         "ExternalDNS synchronizes exposed Kubernetes Services and Ingresses with DNS providers.",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
+// resolveDeprecatedFlags reconciles deprecated flags with their replacements.
+// When --request-timeout is explicitly changed from its default and --kube-api-request-timeout
+// was not, the deprecated value is promoted and a warning is logged.
+// If both are explicitly set, --kube-api-request-timeout takes precedence.
+func (cfg *Config) resolveDeprecatedFlags() {
+	if cfg.RequestTimeout != defaultConfig.RequestTimeout {
+		logrus.Warn("--request-timeout is deprecated, use --kube-api-request-timeout instead")
+		cfg.KubeAPIRequestTimeout = cfg.RequestTimeout
 	}
-
-	// Recreate a minimal post-parse validation for Cobra so it behaves like
-	// Kingpin's Required/Enum validations.
-	cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		// Enforce required provider (must be present) like Kingpin.
-		if cfg.Provider == "" {
-			return fmt.Errorf("--provider is required when using cobra backend")
-		}
-		validProvider := false
-		for _, p := range providerNames {
-			if p == cfg.Provider {
-				validProvider = true
-				break
-			}
-		}
-		if !validProvider {
-			return fmt.Errorf("invalid provider %q; valid values: %s", cfg.Provider, strings.Join(providerNames, ", "))
-		}
-
-		// Enforce at least one source is present and validate allowed values.
-		if len(cfg.Sources) == 0 {
-			return fmt.Errorf("--source is required when using cobra backend")
-		}
-		for _, src := range cfg.Sources {
-			valid := false
-			for _, as := range allowedSources {
-				if src == as {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				return fmt.Errorf("invalid source %q; valid values: %s", src, strings.Join(allowedSources, ", "))
-			}
-		}
-
-		return nil
-	}
-
-	b := NewCobraBinder(cmd)
-	bindFlags(b, cfg)
-
-	return cmd
 }
 
-func bindFlags(b FlagBinder, cfg *Config) {
+// IsPTRSupported returns true if PTR is included in ManagedDNSRecordTypes.
+func (cfg *Config) IsPTRSupported() bool {
+	return slices.Contains(cfg.ManagedDNSRecordTypes, endpoint.RecordTypePTR)
+}
+
+func bindFlags(b flags.FlagBinder, cfg *Config) {
 	// Flags related to Kubernetes
 	b.StringVar("server", "The Kubernetes API server to connect to (default: auto-detect)", defaultConfig.APIServerURL, &cfg.APIServerURL)
-	b.StringVar("kubeconfig", "Retrieve target cluster configuration from a Kubernetes configuration file (default: auto-detect)", defaultConfig.KubeConfig, &cfg.KubeConfig)
-	b.DurationVar("request-timeout", "Request timeout when calling Kubernetes APIs. 0s means no timeout", defaultConfig.RequestTimeout, &cfg.RequestTimeout)
 	b.BoolVar("resolve-service-load-balancer-hostname", "Resolve the hostname of LoadBalancer-type Service object to IP addresses in order to create DNS A/AAAA records instead of CNAMEs", false, &cfg.ResolveServiceLoadBalancerHostname)
 	b.BoolVar("listen-endpoint-events", "Trigger a reconcile on changes to EndpointSlices, for Service source (default: false)", false, &cfg.ListenEndpointEvents)
-
-	// Flags related to cloud foundry
-	b.StringVar("cf-api-endpoint", "The fully-qualified domain name of the cloud foundry instance you are targeting", defaultConfig.CFAPIEndpoint, &cfg.CFAPIEndpoint)
-	b.StringVar("cf-username", "The username to log into the cloud foundry API", defaultConfig.CFUsername, &cfg.CFUsername)
-	b.StringVar("cf-password", "The password to log into the cloud foundry API", defaultConfig.CFPassword, &cfg.CFPassword)
 
 	// Flags related to Gloo
 	b.StringsVar("gloo-namespace", "The Gloo Proxy namespace; specify multiple times for multiple namespaces. (default: gloo-system)", []string{"gloo-system"}, &cfg.GlooNamespaces)
@@ -612,21 +541,21 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.BoolVar("always-publish-not-ready-addresses", "Always publish also not ready addresses for headless services (optional)", false, &cfg.AlwaysPublishNotReadyAddresses)
 	b.StringVar("annotation-filter", "Filter resources queried for endpoints by annotation, using label selector semantics", defaultConfig.AnnotationFilter, &cfg.AnnotationFilter)
 	b.StringVar("annotation-prefix", "Annotation prefix for external-dns annotations (default: external-dns.alpha.kubernetes.io/)", defaultConfig.AnnotationPrefix, &cfg.AnnotationPrefix)
-	b.BoolVar("combine-fqdn-annotation", "Combine FQDN template and Annotations instead of overwriting (default: false)", false, &cfg.CombineFQDNAndAnnotation)
 	b.EnumVar("compatibility", "Process annotation semantics from legacy implementations (optional, options: mate, molecule, kops-dns-controller)", defaultConfig.Compatibility, &cfg.Compatibility, "", "mate", "molecule", "kops-dns-controller")
 	b.StringVar("connector-source-server", "The server to connect for connector source, valid only when using connector source", defaultConfig.ConnectorSourceServer, &cfg.ConnectorSourceServer)
 	b.StringVar("crd-source-apiversion", "API version of the CRD for crd source, e.g. `externaldns.k8s.io/v1alpha1`, valid only when using crd source", defaultConfig.CRDSourceAPIVersion, &cfg.CRDSourceAPIVersion)
 	b.StringVar("crd-source-kind", "Kind of the CRD for the crd source in API group and version specified by crd-source-apiversion", defaultConfig.CRDSourceKind, &cfg.CRDSourceKind)
 	b.StringsVar("default-targets", "Set globally default host/IP that will apply as a target instead of source addresses. Specify multiple times for multiple targets (optional)", nil, &cfg.DefaultTargets)
 	b.BoolVar("force-default-targets", "Force the application of --default-targets, overriding any targets provided by the source (DEPRECATED: This reverts to (improved) legacy behavior which allows empty CRD targets for migration to new state)", defaultConfig.ForceDefaultTargets, &cfg.ForceDefaultTargets)
+	b.BoolVar("prefer-alias", "When enabled, CNAME records will have the alias annotation set, signaling providers that support ALIAS records to use them instead of CNAMEs. Supported by: PowerDNS, AWS (with --aws-prefer-cname disabled)", defaultConfig.PreferAlias, &cfg.PreferAlias)
 	b.StringsVar("exclude-record-types", "Record types to exclude from management; specify multiple times to exclude many; (optional)", nil, &cfg.ExcludeDNSRecordTypes)
 	b.StringsVar("exclude-target-net", "Exclude target nets (optional)", nil, &cfg.ExcludeTargetNets)
 	b.BoolVar("exclude-unschedulable", "Exclude nodes that are considered unschedulable (default: true)", defaultConfig.ExcludeUnschedulable, &cfg.ExcludeUnschedulable)
 	b.BoolVar("expose-internal-ipv6", "When using the node source, expose internal IPv6 addresses (optional, default: false)", false, &cfg.ExposeInternalIPV6)
-	b.StringVar("fqdn-template", "A templated string that's used to generate DNS names from sources that don't define a hostname themselves, or to add a hostname suffix when paired with the fake source (optional). Accepts comma separated list for multiple global FQDN.", defaultConfig.FQDNTemplate, &cfg.FQDNTemplate)
 	b.StringVar("gateway-label-filter", "Filter Gateways of Route endpoints via label selector (default: all gateways)", defaultConfig.GatewayLabelFilter, &cfg.GatewayLabelFilter)
 	b.StringVar("gateway-name", "Limit Gateways of Route endpoints to a specific name (default: all names)", defaultConfig.GatewayName, &cfg.GatewayName)
 	b.StringVar("gateway-namespace", "Limit Gateways of Route endpoints to a specific namespace (default: all namespaces)", defaultConfig.GatewayNamespace, &cfg.GatewayNamespace)
+	b.BoolVar("gateway-listener-sets", "Enable ListenerSet support for Gateway API sources (requires Gateway API v1.5+ CRDs) (default: false)", false, &cfg.GatewayListenerSets)
 	b.BoolVar("ignore-hostname-annotation", "Ignore hostname annotation when generating DNS names, valid only when --fqdn-template is set (default: false)", false, &cfg.IgnoreHostnameAnnotation)
 	b.BoolVar("ignore-ingress-rules-spec", "Ignore the spec.rules section in Ingress resources (default: false)", false, &cfg.IgnoreIngressRulesSpec)
 	b.BoolVar("ignore-ingress-tls-spec", "Ignore the spec.tls section in Ingress resources (default: false)", false, &cfg.IgnoreIngressTLSSpec)
@@ -646,21 +575,14 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.BoolVar("traefik-enable-legacy", "Enable legacy listeners on Resources under the traefik.containo.us API Group", defaultConfig.TraefikEnableLegacy, &cfg.TraefikEnableLegacy)
 	b.BoolVar("traefik-disable-new", "Disable listeners on Resources under the traefik.io API Group", defaultConfig.TraefikDisableNew, &cfg.TraefikDisableNew)
 
+	b.StringsVar("unstructured-resource", "When using the unstructured source, specify resources in resource.version.group format (e.g., virtualmachineinstances.v1.kubevirt.io, configmap.v1); specify multiple times for multiple resources", nil, &cfg.UnstructuredResources)
 	b.StringsVar("events-emit", "Events that should be emitted. Specify multiple times for multiple events support (optional, default: none, expected: RecordReady, RecordDeleted, RecordError)", defaultConfig.EmitEvents, &cfg.EmitEvents)
-
-	// Flags related to providers
-	if _, ok := b.(*CobraBinder); ok {
-		providerHelp := "The DNS provider where the DNS records will be created (required, options: " + strings.Join(providerNames, ", ") + ")"
-		b.StringVar("provider", providerHelp, cfg.Provider, &cfg.Provider)
-
-		sourceHelp := "The resource types that are queried for endpoints; specify multiple times for multiple sources (required, options: " + strings.Join(allowedSources, ", ") + ")"
-		b.StringsVar("source", sourceHelp, append([]string(nil), cfg.Sources...), &cfg.Sources)
-	}
 	b.DurationVar("provider-cache-time", "The time to cache the DNS provider record list requests.", defaultConfig.ProviderCacheTime, &cfg.ProviderCacheTime)
+	b.BoolVar("create-ptr", "When enabled, automatically create PTR records for A/AAAA records. Per-resource annotations can override this default. The provider must have authority over the reverse DNS zones (e.g. in-addr.arpa). Include reverse zones in --domain-filter.", defaultConfig.CreatePTR, &cfg.CreatePTR)
 	b.StringsVar("domain-filter", "Limit possible target zones by a domain suffix; specify multiple times for multiple domains (optional)", []string{""}, &cfg.DomainFilter)
-	b.StringsVar("exclude-domains", "Exclude subdomains (optional)", []string{""}, &cfg.ExcludeDomains)
+	b.StringsVar("exclude-domains", "Exclude subdomains (optional)", []string{""}, &cfg.DomainExclude)
 	b.RegexpVar("regex-domain-filter", "Limit possible domains and target zones by a Regex filter; Overrides domain-filter (optional)", defaultConfig.RegexDomainFilter, &cfg.RegexDomainFilter)
-	b.RegexpVar("regex-domain-exclusion", "Regex filter that excludes domains and target zones matched by regex-domain-filter (optional); Require 'regex-domain-filter' ", defaultConfig.RegexDomainExclusion, &cfg.RegexDomainExclusion)
+	b.RegexpVar("regex-domain-exclusion", "Regex filter that excludes domains and target zones matched by regex-domain-filter (optional)", defaultConfig.RegexDomainExclude, &cfg.RegexDomainExclude)
 	b.StringsVar("zone-name-filter", "Filter target zones by zone domain (For now, only AzureDNS provider is using this flag); specify multiple times for multiple zones (optional)", []string{""}, &cfg.ZoneNameFilter)
 	b.StringsVar("zone-id-filter", "Filter target zones by hosted zone id; specify multiple times for multiple zones (optional)", []string{""}, &cfg.ZoneIDFilter)
 	b.StringVar("google-project", "When using the Google provider, current project is auto-detected, when running on GCP. Specify other project with this. Must be specified when running outside GCP.", defaultConfig.GoogleProject, &cfg.GoogleProject)
@@ -692,6 +614,8 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.DurationVar("azure-zones-cache-duration", "When using the Azure provider, set the zones list cache TTL (0s to disable).", defaultConfig.AzureZonesCacheDuration, &cfg.AzureZonesCacheDuration)
 	b.IntVar("azure-maxretries-count", "When using the Azure provider, set the number of retries for API calls (When less than 0, it disables retries). (optional)", defaultConfig.AzureMaxRetriesCount, &cfg.AzureMaxRetriesCount)
 
+	b.IntVar("batch-change-size", "Set the maximum number of DNS record changes that will be submitted to the provider in each batch (optional)", defaultConfig.BatchChangeSize, &cfg.BatchChangeSize)
+	b.DurationVar("batch-change-interval", "Set the interval between batch changes (optional, default: 1s)", defaultConfig.BatchChangeInterval, &cfg.BatchChangeInterval)
 	b.BoolVar("cloudflare-proxied", "When using the Cloudflare provider, specify if the proxy mode must be enabled (default: disabled)", false, &cfg.CloudflareProxied)
 	b.BoolVar("cloudflare-custom-hostnames", "When using the Cloudflare provider, specify if the Custom Hostnames feature will be used. Requires \"Cloudflare for SaaS\" enabled. (default: disabled)", false, &cfg.CloudflareCustomHostnames)
 	b.EnumVar("cloudflare-custom-hostnames-min-tls-version", "When using the Cloudflare provider with the Custom Hostnames, specify which Minimum TLS Version will be used by default. (default: 1.0, options: 1.0, 1.1, 1.2, 1.3)", "1.0", &cfg.CloudflareCustomHostnamesMinTLSVersion, "1.0", "1.1", "1.2", "1.3")
@@ -702,6 +626,7 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.StringVar("cloudflare-record-comment", "When using the Cloudflare provider, specify the comment for the DNS records (default: '')", "", &cfg.CloudflareDNSRecordsComment)
 
 	b.StringVar("coredns-prefix", "When using the CoreDNS provider, specify the prefix name", defaultConfig.CoreDNSPrefix, &cfg.CoreDNSPrefix)
+	b.BoolVar("coredns-strictly-owned", "When using the CoreDNS provider, store and filter strictly by txt-owner-id using an extra field inside of the etcd service (default: false)", defaultConfig.CoreDNSStrictlyOwned, &cfg.CoreDNSStrictlyOwned)
 	b.StringVar("akamai-serviceconsumerdomain", "When using the Akamai provider, specify the base URL (required when --provider=akamai and edgerc-path not specified)", defaultConfig.AkamaiServiceConsumerDomain, &cfg.AkamaiServiceConsumerDomain)
 	b.StringVar("akamai-client-token", "When using the Akamai provider, specify the client token (required when --provider=akamai and edgerc-path not specified)", defaultConfig.AkamaiClientToken, &cfg.AkamaiClientToken)
 	b.StringVar("akamai-client-secret", "When using the Akamai provider, specify the client secret (required when --provider=akamai and edgerc-path not specified)", defaultConfig.AkamaiClientSecret, &cfg.AkamaiClientSecret)
@@ -724,7 +649,6 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.StringVar("ns1-endpoint", "When using the NS1 provider, specify the URL of the API endpoint to target (default: https://api.nsone.net/v1/)", defaultConfig.NS1Endpoint, &cfg.NS1Endpoint)
 	b.BoolVar("ns1-ignoressl", "When using the NS1 provider, specify whether to verify the SSL certificate (default: false)", defaultConfig.NS1IgnoreSSL, &cfg.NS1IgnoreSSL)
 	b.IntVar("ns1-min-ttl", "Minimal TTL (in seconds) for records. This value will be used if the provided TTL for a service/ingress is lower than this.", cfg.NS1MinTTLSeconds, &cfg.NS1MinTTLSeconds)
-	b.IntVar("digitalocean-api-page-size", "Configure the page size used when querying the DigitalOcean API.", defaultConfig.DigitalOceanAPIPageSize, &cfg.DigitalOceanAPIPageSize)
 	// GoDaddy flags
 	b.StringVar("godaddy-api-key", "When using the GoDaddy provider, specify the API Key (required when --provider=godaddy)", defaultConfig.GoDaddyAPIKey, &cfg.GoDaddyAPIKey)
 	b.StringVar("godaddy-api-secret", "When using the GoDaddy provider, specify the API secret (required when --provider=godaddy)", defaultConfig.GoDaddySecretKey, &cfg.GoDaddySecretKey)
@@ -746,7 +670,6 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.StringsVar("rfc2136-host", "When using the RFC2136 provider, specify the host of the DNS server (optionally specify multiple times when using --rfc2136-load-balancing-strategy)", []string{defaultConfig.RFC2136Host[0]}, &cfg.RFC2136Host)
 	b.IntVar("rfc2136-port", "When using the RFC2136 provider, specify the port of the DNS server", defaultConfig.RFC2136Port, &cfg.RFC2136Port)
 	b.StringsVar("rfc2136-zone", "When using the RFC2136 provider, specify zone entry of the DNS server to use (can be specified multiple times)", nil, &cfg.RFC2136Zone)
-	b.BoolVar("rfc2136-create-ptr", "When using the RFC2136 provider, enable PTR management", defaultConfig.RFC2136CreatePTR, &cfg.RFC2136CreatePTR)
 	b.BoolVar("rfc2136-insecure", "When using the RFC2136 provider, specify whether to attach TSIG or not (default: false, requires --rfc2136-tsig-keyname and rfc2136-tsig-secret)", defaultConfig.RFC2136Insecure, &cfg.RFC2136Insecure)
 	b.StringVar("rfc2136-tsig-keyname", "When using the RFC2136 provider, specify the TSIG key to attached to DNS messages (required when --rfc2136-insecure=false)", defaultConfig.RFC2136TSIGKeyName, &cfg.RFC2136TSIGKeyName)
 	b.StringVar("rfc2136-tsig-secret", "When using the RFC2136 provider, specify the TSIG (base64) value to attached to DNS messages (required when --rfc2136-insecure=false)", defaultConfig.RFC2136TSIGSecret, &cfg.RFC2136TSIGSecret)
@@ -780,7 +703,7 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.EnumVar("policy", "Modify how DNS records are synchronized between sources and providers (default: sync, options: sync, upsert-only, create-only)", defaultConfig.Policy, &cfg.Policy, "sync", "upsert-only", "create-only")
 
 	// Flags related to the registry
-	b.EnumVar("registry", "The registry implementation to use to keep track of DNS record ownership (default: txt, options: txt, noop, dynamodb, aws-sd)", defaultConfig.Registry, &cfg.Registry, "txt", "noop", "dynamodb", "aws-sd")
+	b.EnumVar("registry", "The registry implementation to use to keep track of DNS record ownership (default: txt, options: txt, noop, dynamodb, aws-sd)", defaultConfig.Registry, &cfg.Registry, RegistryTXT, RegistryNoop, RegistryDynamoDB, RegistryAWSSD)
 	b.StringVar("txt-owner-id", "When using the TXT or DynamoDB registry, a name that identifies this instance of ExternalDNS (default: default)", defaultConfig.TXTOwnerID, &cfg.TXTOwnerID)
 	b.StringVar("txt-prefix", "When using the TXT registry, a custom string that's prefixed to each ownership DNS record (optional). Could contain record type template like '%{record_type}-prefix-'. Mutual exclusive with txt-suffix!", defaultConfig.TXTPrefix, &cfg.TXTPrefix)
 	b.StringVar("txt-suffix", "When using the TXT registry, a custom string that's suffixed to the host portion of each ownership DNS record (optional). Could contain record type template like '-%{record_type}-suffix'. Mutual exclusive with txt-prefix!", defaultConfig.TXTSuffix, &cfg.TXTSuffix)
@@ -798,6 +721,7 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.BoolVar("once", "When enabled, exits the synchronization loop after the first iteration (default: disabled)", defaultConfig.Once, &cfg.Once)
 	b.BoolVar("dry-run", "When enabled, prints DNS record changes rather than actually performing them (default: disabled)", defaultConfig.DryRun, &cfg.DryRun)
 	b.BoolVar("events", "When enabled, in addition to running every interval, the reconciliation loop will get triggered when supported sources change (default: disabled)", defaultConfig.UpdateEvents, &cfg.UpdateEvents)
+	b.DurationVar("min-ttl", "Configure global TTL for records in duration format. This value is used when the TTL for a source is not set or set to 0. (optional; examples: 1m12s, 72s, 72)", defaultConfig.MinTTL, &cfg.MinTTL)
 
 	// Miscellaneous flags
 	b.EnumVar("log-format", "The format in which log messages are printed (default: text, options: text, json)", defaultConfig.LogFormat, &cfg.LogFormat, "text", "json")
@@ -809,6 +733,19 @@ func bindFlags(b FlagBinder, cfg *Config) {
 	b.DurationVar("webhook-provider-read-timeout", "The read timeout for the webhook provider in duration format (default: 5s)", defaultConfig.WebhookProviderReadTimeout, &cfg.WebhookProviderReadTimeout)
 	b.DurationVar("webhook-provider-write-timeout", "The write timeout for the webhook provider in duration format (default: 10s)", defaultConfig.WebhookProviderWriteTimeout, &cfg.WebhookProviderWriteTimeout)
 	b.BoolVar("webhook-server", "When enabled, runs as a webhook server instead of a controller. (default: false).", defaultConfig.WebhookServer, &cfg.WebhookServer)
+
+	// FQDN Templating
+	b.BoolVar("combine-fqdn-annotation", "Combine FQDN template and Annotations instead of overwriting (default: false)", false, &cfg.CombineFQDNAndAnnotation)
+	b.StringVar("fqdn-template", "A templated string that's used to generate DNS names from sources that don't define a hostname themselves, or to add a hostname suffix when paired with the fake source (optional). Accepts comma separated list for multiple global FQDN.", defaultConfig.FQDNTemplate, &cfg.FQDNTemplate)
+	b.StringVar("target-template", "A templated string used to generate DNS targets (IP or hostname) from sources that support it (optional). Accepts comma separated list for multiple targets.", defaultConfig.TargetTemplate, &cfg.TargetTemplate)
+	b.StringVar("fqdn-target-template", "A template that returns host:target pairs (e.g., '{{range .Object.endpoints}}{{.targetRef.name}}.svc.example.com:{{index .addresses 0}},{{end}}'). Accepts comma separated list for multiple pairs.", defaultConfig.FQDNTargetTemplate, &cfg.FQDNTargetTemplate)
+
+	// kube client config flags
+	b.StringVar("kubeconfig", "Retrieve target cluster configuration from a Kubernetes configuration file (default: auto-detect)", defaultConfig.KubeConfig, &cfg.KubeConfig)
+	b.DurationVar("request-timeout", "[DEPRECATED: use --kube-api-request-timeout] Request timeout when calling Kubernetes APIs. 0s means no timeout", defaultConfig.RequestTimeout, &cfg.RequestTimeout)
+	b.DurationVar("kube-api-request-timeout", "Request timeout when calling Kubernetes APIs. 0s means no timeout", defaultConfig.KubeAPIRequestTimeout, &cfg.KubeAPIRequestTimeout)
+	b.IntVar("kube-api-qps", "Maximum QPS to the Kubernetes API server from this client.", defaultConfig.KubeAPIQPS, &cfg.KubeAPIQPS)
+	b.IntVar("kube-api-burst", "Maximum burst for throttle to the Kubernetes API server from this client.", defaultConfig.KubeAPIBurst, &cfg.KubeAPIBurst)
 }
 
 func App(cfg *Config) *kingpin.Application {
@@ -816,14 +753,16 @@ func App(cfg *Config) *kingpin.Application {
 	app.Version(Version)
 	app.DefaultEnvars()
 
-	bindFlags(NewKingpinBinder(app), cfg)
+	bindFlags(flags.NewKingpinBinder(app), cfg)
 
 	// Kingpin-only semantics: preserve Required/PlaceHolder and enum validation
 	// that Kingpin provided before the flags were migrated into the binder.
-	app.Flag("provider", "The DNS provider where the DNS records will be created (required, options: akamai, alibabacloud, aws, aws-sd, azure, azure-dns, azure-private-dns, civo, cloudflare, coredns, digitalocean, dnsimple, exoscale, gandi, godaddy, google, inmemory, linode, ns1, oci, ovh, pdns, pihole, plural, rfc2136, scaleway, skydns, transip, webhook)").Required().PlaceHolder("provider").EnumVar(&cfg.Provider, providerNames...)
+	providerHelp := "The DNS provider where the DNS records will be created (required, options: " + strings.Join(ProviderNames, ", ") + ")"
+	app.Flag("provider", providerHelp).Required().PlaceHolder("provider").EnumVar(&cfg.Provider, ProviderNames...)
 
 	// Reintroduce source enum/required validation in Kingpin to match previous behavior.
-	app.Flag("source", "The resource types that are queried for endpoints; specify multiple times for multiple sources (required, options: service, ingress, node, pod, fake, connector, gateway-httproute, gateway-grpcroute, gateway-tlsroute, gateway-tcproute, gateway-udproute, istio-gateway, istio-virtualservice, cloudfoundry, contour-httpproxy, gloo-proxy, crd, empty, skipper-routegroup, openshift-route, ambassador-host, kong-tcpingress, f5-virtualserver, f5-transportserver, traefik-proxy)").Required().PlaceHolder("source").EnumsVar(&cfg.Sources, "service", "ingress", "node", "pod", "gateway-httproute", "gateway-grpcroute", "gateway-tlsroute", "gateway-tcproute", "gateway-udproute", "istio-gateway", "istio-virtualservice", "cloudfoundry", "contour-httpproxy", "gloo-proxy", "fake", "connector", "crd", "empty", "skipper-routegroup", "openshift-route", "ambassador-host", "kong-tcpingress", "f5-virtualserver", "f5-transportserver", "traefik-proxy")
+	sourceHelp := "The resource types that are queried for endpoints; specify multiple times for multiple sources (required, options: " + strings.Join(allowedSources, ", ") + ")"
+	app.Flag("source", sourceHelp).Required().PlaceHolder("source").EnumsVar(&cfg.Sources, allowedSources...)
 
 	return app
 }
