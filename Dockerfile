@@ -1,28 +1,19 @@
-# syntax=docker/dockerfile:1@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
+FROM alpine:3.22 AS setup
 
-FROM golang:alpine@sha256:d3f0cf7723f3429e3f9ed846243970b20a2de7bae6a5b66fc5914e228d831bbb AS builder
-ARG TARGETOS
-ARG TARGETARCH
+RUN apk add --no-cache ca-certificates \
+  && addgroup -S -g 65532 nonroot \
+  && adduser -S -u 65532 -G nonroot -H -D nonroot
 
-WORKDIR /src
+FROM scratch
 
-# Build the application.
-# Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.
-# Leverage a bind mount to the current directory to avoid having to copy the
-# source code into the container.
-# CGO_ENABLED=0 makes Go statically link the binary so we can use it in a
-# distroless image. GOARCH doesn't have a default value, allowing the binary
-# build for the host. For example, if we call docker build in a local env with
-# Apple Silicon M1 the docker BUILDPLATFORM arg will be linux/arm64. When the
-# platform is Apple x86 it will be linux/amd64. Therefore, by leaving it empty
-# container and binary shipped on it has the same platform.
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    --mount=type=bind,target=. \
-    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /webhook ./cmd/webhook
+ARG TARGETPLATFORM
 
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot@sha256:e8a4044e0b4ae4257efa45fc026c0bc30ad320d43bd4c1a7d5271bd241e386d0 AS final
+COPY --from=setup /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=setup /etc/passwd /etc/passwd
+COPY --from=setup /etc/group /etc/group
 
-COPY --from=builder /webhook /
+COPY ${TARGETPLATFORM}/external-dns-tidydns-webhook /external-dns-tidydns-webhook
+
 USER 65532:65532
-ENTRYPOINT [ "/webhook" ]
+
+ENTRYPOINT ["/external-dns-tidydns-webhook"]

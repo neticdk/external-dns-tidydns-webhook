@@ -1,0 +1,41 @@
+# This file is updated automatically by hack/do.sh. Do not edit it directly.
+---
+name: Update boilerplate files
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "hack/boilerplate.json"
+
+jobs:
+  update_boilerplate:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read ref from boilerplate.json
+        id: get_ref
+        run: |
+          echo "ref_value=$(jq -r .ref hack/boilerplate.json)" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Update boilerplate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_NETIC_ROBOT_CLASSIC_TOKEN }}
+        run: |
+          ./hack/do.sh renovate
+        shell: bash
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "chore: Auto-update boilerplate from ref ${{ steps.get_ref.outputs.ref_value }}"
