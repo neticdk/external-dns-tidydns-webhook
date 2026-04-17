@@ -203,7 +203,7 @@ const defaultLogLevel = slog.LevelInfo
 func initLogger(logFormat, logLevel string) {
 	logLeveller := new(slog.LevelVar)
 	if err := logLeveller.UnmarshalText([]byte(logLevel)); err != nil {
-		slog.Error(err.Error())
+		slog.Default().Error(err.Error())
 		logLeveller.Set(defaultLogLevel)
 	}
 
