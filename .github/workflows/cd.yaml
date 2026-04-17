@@ -1,0 +1,16 @@
+---
+name: CD
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Go Continuous Delivery
+    uses: neticdk/shared-github-actions/.github/workflows/go-cd.yaml@v0.4.2
+    if: hashFiles('.goreleaser.yaml') != ''

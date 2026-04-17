@@ -1,84 +1,125 @@
-# External-DNS Tidy Webhook
+# external-dns-tidydns-webhook
 
-Webhook to enable
-[External-DNS](https://github.com/kubernetes-sigs/external-dns) to talk to
-[Tidy-DNS](https://www.netic.dk/).
+A [webhook provider](https://kubernetes-sigs.github.io/external-dns/latest/tutorials/webhook-provider/) for [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) that manages DNS records in TidyDNS.
 
-This webhook is still work in progress and represents a minimal viable product.
+## Features
 
-## Prerequisites
+- Supports **A**, **CNAME**, **TXT**, and **SRV** record types
+- Zone caching with configurable background refresh interval
+- Domain filtering (plain suffix, exclusion lists, and regex patterns)
+- OpenTelemetry traces and metrics (Prometheus `/metrics` endpoint)
 
-For general development one should have the Golang environment installed.
+## Deployment
 
-For deployment only Docker is necessary.
+The webhook runs as a sidecar alongside ExternalDNS. Deploy it using the [external-dns Helm chart](https://github.com/kubernetes-sigs/external-dns/tree/master/charts/external-dns):
 
-## User Guide
+```yaml
+# values.yaml
+policy: sync
 
-Tidy username and password are provided through the environment variables
-`TIDYDNS_USER` and `TIDYDNS_PASS`.
-
-The application arguments are as follows:
-
-- `tidydns-endpoint` Tidy DNS server addr
-- `zone-update-interval` The time-duration between updating the zone information
-- `log-level` Application logging level (debug, info, warn, error)
-- `log-format` Application logging format (json or logfmt)
-- `read-timeout` Read timeout in duration format (default: 5s)
-- `write-timeout` Write timeout in duration format (default: 10s)
-
-This application is strictly meant to run in a container as a sidecar to
-External-DNS in a Kubernetes environment. Refer to the External-DNS documentaion
-for how to configure it in this context.
-
-Locally the application can be built and run to verify that it can talk to Tidy
-DNS server and applications can be build around it to test the webhook
-endpoints. Running the application locally assuming the binary is named
-`webhook`:
-
-```sh
-export TIDYDNS_USER='<tidy username>'
-export TIDYDNS_PASS='<tidy password>'
-./webhook --tidydns-endpoint='https://dnsadmin.company.com/index.cgi' --zone-update-interval='10m' --log-level='info'
+provider:
+  name: webhook
+  webhook:
+    image:
+      repository: ghcr.io/neticdk/external-dns-tidydns-webhook
+      tag: latest  # pin to a release tag in production
+    env:
+      - name: TIDYDNS_USER
+        valueFrom:
+          secretKeyRef:
+            name: tidydns-credentials
+            key: username
+      - name: TIDYDNS_PASS
+        valueFrom:
+          secretKeyRef:
+            name: tidydns-credentials
+            key: password
+    args:
+      - --tidydns-endpoint=https://tidy.example.com/index.cgi
+      - --domain-filter=example.com
 ```
 
-## Developer Guide
-
-All dependencies are included in the `vendor/` directory. This makes the
-repository significantly larger but also means that Docker is the only
-requirement. Everything else is present. A benefit of this is that running CI
-pipelines becomes lighter and faster because no external dependencies needs to
-be downloaded before building and running tests.
-
-An example of building a multiplatform image is shown below:
-
-```sh
-export VERSION=1.2.3
-export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
-export PLATFORMS='linux/amd64,linux/arm64'
-docker buildx build --platform=$PLATFORMS --tag $REPO_PATH:$VERSION --push .
+```bash
+helm install external-dns external-dns/external-dns -f values.yaml
 ```
 
-If building for the local platform is sufficient, the regular build/push
-commands can be used:
+> [!NOTE]
+> Create the Kubernetes Secret before deploying:
+> ```bash
+> kubectl create secret generic tidydns-credentials \
+>   --from-literal=username='<tidydns-user>' \
+>   --from-literal=password='<tidydns-password>'
+> ```
 
-```sh
-export VERSION=1.2.3
-export REPO_PATH='registry.company.com/username/external-dns-tidydns-webhook'
-docker build --tag $REPO_PATH:$VERSION .
-docker push $REPO_PATH:$VERSION
+### Endpoints
+
+| Port | Path | Description |
+|------|------|-------------|
+| 8888 | `/` | Webhook API (consumed by ExternalDNS sidecar, bound to `127.0.0.1`) |
+| 8080 | `/healthz` | Health check |
+| 8080 | `/metrics` | Prometheus metrics |
+
+## Configuration
+
+All flags can also be set via environment variables (uppercase, underscores instead of dashes, e.g. `TIDYDNS_ENDPOINT`).
+
+| Flag | Env | Default | Description |
+|------|-----|---------|-------------|
+| `--tidydns-endpoint` | `TIDYDNS_ENDPOINT` | *(required)* | TidyDNS server URL |
+| — | `TIDYDNS_USER` | — | TidyDNS username |
+| — | `TIDYDNS_PASS` | — | TidyDNS password |
+| `--zone-update-interval` | `ZONE_UPDATE_INTERVAL` | `10m` | Interval for background zone refresh |
+| `--max-concurrency` | `MAX_CONCURRENCY` | `10` | Max concurrent TidyDNS API calls |
+| `--domain-filter` | `DOMAIN_FILTER` | — | Limit to domains matching these suffixes (repeatable) |
+| `--exclude-domains` | `EXCLUDE_DOMAINS` | — | Exclude domains matching these suffixes (repeatable) |
+| `--regex-domain-filter` | `REGEX_DOMAIN_FILTER` | — | Include domains matching this regex |
+| `--regex-domain-exclusion` | `REGEX_DOMAIN_EXCLUSION` | — | Exclude domains matching this regex |
+| `--log-level` | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warning`, `error` |
+| `--log-format` | `LOG_FORMAT` | `logfmt` | Log format: `logfmt`, `json` |
+| `--read-timeout` | `READ_TIMEOUT` | `5s` | HTTP read timeout |
+| `--write-timeout` | `WRITE_TIMEOUT` | `10s` | HTTP write timeout |
+
+### OpenTelemetry
+
+The webhook supports OpenTelemetry tracing via standard `OTEL_*` environment variables. Set `service.version` and `deployment.environment.name` via `OTEL_RESOURCE_ATTRIBUTES`:
+
+```yaml
+env:
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "http://otel-collector:4317"
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: "service.version=1.0.0,deployment.environment.name=production"
 ```
 
-Building the application locally for testing:
+## Development
 
-```sh
-go build ./cmd/webhook/
+Prerequisites: Go 1.26+, [golangci-lint](https://golangci-lint.run/)
+
+```bash
+make build        # lint, test, build
+make test         # run unit tests with coverage
+make race         # run tests with race detector
+make lint         # run golangci-lint
+make fmt          # format source code
 ```
 
-## Known Issues and Limitations
+### Running locally
 
-- An effort should be made to use
-  [tidydns-go](https://github.com/neticdk/tidydns-go) instead of the local
-  tidydns package
-- So far the supported record types are A, AAAA and CNAME
-- More GitHub actions
-  - Relase pipeline
+```bash
+export TIDYDNS_USER='<username>'
+export TIDYDNS_PASS='<password>'
+
+go run main.go --tidydns-endpoint='https://dnsadmin.example.com/index.cgi' \
+         --log-level='debug'
+```
+
+### Releasing
+
+Releases are managed by [GoReleaser](https://goreleaser.com/). Tag a commit and push:
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The CI pipeline builds binaries, creates multi-arch container images (`linux/amd64`, `linux/arm64`), and publishes them to `ghcr.io/neticdk/external-dns-tidydns-webhook`.

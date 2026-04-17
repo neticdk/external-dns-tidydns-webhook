@@ -1,0 +1,63 @@
+# yaml-language-server: =https://goreleaser.com/static/schema.json
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+    - ./hack/do.sh completions
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - "-s -w -X main.version={{.Version}}"
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - completions/*
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^Merge pull request"
+      - "^Merge branch"
+
+dockers_v2:
+  - platforms:
+      - linux/amd64
+      - linux/arm64
+    dockerfile: Dockerfile
+    images:
+      - "ghcr.io/neticdk/{{ .ProjectName }}"
+    tags:
+      - "{{ .Tag }}"
+      - "latest"
+    labels:
+      "org.opencontainers.image.description": "A webhook provider for ExternalDNS that manages DNS records in TidyDNS."
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.title": "{{.ProjectName}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}"
+
+release:
+  # If set to auto, will mark the release as not ready for production
+  # in case there is an indicator for this in the tag e.g. v1.0.0-rc1
+  prerelease: auto

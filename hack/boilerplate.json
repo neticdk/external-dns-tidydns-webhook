@@ -1,0 +1,5 @@
+{
+  "datasource": "git-refs",
+  "depName": "https://github.com/neticdk/go-project-boilerplate-source",
+  "ref": "v0.11.1"
+}
