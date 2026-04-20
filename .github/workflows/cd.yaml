@@ -12,5 +12,5 @@ permissions:
 jobs:
   release:
     name: Go Continuous Delivery
-    uses: neticdk/shared-github-actions/.github/workflows/go-cd.yaml@v0.4.2
+    uses: neticdk/shared-github-actions/.github/workflows/go-cd.yaml@a896dd9c1eb45e54c30eb3f256e6f269869e98e1 # v0.4.2
     if: hashFiles('.goreleaser.yaml') != ''
