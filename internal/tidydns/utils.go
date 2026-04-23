@@ -1,6 +1,7 @@
 package tidydns
 
 import (
+	"net"
 	"strings"
 
 	gotidydns "github.com/neticdk/tidydns-go/pkg/tidydns"
@@ -93,12 +94,21 @@ func isSupportedRecordType(s string) bool {
 	}
 }
 
-// registryTXTLocation returns LocationID 1 for TXT records that are
-// external-dns registry ownership records (identified by the
-// "heritage=external-dns" marker in their target). All other records
-// get LocationID 0 (the default).
-func registryTXTLocation(recordType string, target string) gotidydns.LocationID {
+// IsPrivateIP reports whether ip is a private address, according to RFC 1918 (IPv4 addresses) and RFC 4193 (IPv6 addresses).
+func isPrivateIP(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil && ip.IsPrivate()
+}
+
+// recordLocation returns LocationID 1 for TXT records that are external-dns
+// registry ownership records (identified by the "heritage=external-dns" marker
+// in their target) and for records whose target is an RFC 1918 or RFC 4193 private IP
+// address. All other records get LocationID 0 (the default).
+func recordLocation(recordType string, target string) gotidydns.LocationID {
 	if recordType == RecordTypeTXT && strings.Contains(target, "heritage=external-dns") {
+		return 1
+	}
+	if isPrivateIP(target) {
 		return 1
 	}
 	return 0
