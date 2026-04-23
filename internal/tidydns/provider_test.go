@@ -599,7 +599,7 @@ func TestApplyChangesPhaseOrdering(t *testing.T) {
 	client.AssertExpectations(t)
 }
 
-func TestRegistryTXTLocation(t *testing.T) {
+func TestRecordLocation(t *testing.T) {
 	tests := []struct {
 		name       string
 		recordType string
@@ -608,12 +608,18 @@ func TestRegistryTXTLocation(t *testing.T) {
 	}{
 		{"heritage TXT gets location 1", RecordTypeTXT, "heritage=external-dns,external-dns/owner=default", 1},
 		{"non-heritage TXT gets location 0", RecordTypeTXT, "v=spf1 include:example.com", 0},
-		{"A record always gets location 0", RecordTypeA, "heritage=external-dns", 0},
+		{"A record with non-private IP gets location 0", RecordTypeA, "8.8.8.8", 0},
+		{"A record with 10.x private IP gets location 1", RecordTypeA, "10.0.1.5", 1},
+		{"A record with 172.16.x private IP gets location 1", RecordTypeA, "172.16.0.1", 1},
+		{"A record with 172.31.x private IP gets location 1", RecordTypeA, "172.31.255.255", 1},
+		{"A record with 172.32.x gets location 0", RecordTypeA, "172.32.0.1", 0},
+		{"A record with 192.168.x private IP gets location 1", RecordTypeA, "192.168.1.100", 1},
+		{"CNAME gets location 0", RecordTypeCNAME, "target.example.com.", 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, int(registryTXTLocation(tt.recordType, tt.target)), tt.want)
+			assert.Equal(t, int(recordLocation(tt.recordType, tt.target)), tt.want)
 		})
 	}
 }

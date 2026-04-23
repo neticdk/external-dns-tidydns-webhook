@@ -438,7 +438,7 @@ func (p *Provider) updateEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 			Description: newEp.SetIdentifier,
 			Destination: target,
 			TTL:         ttl,
-			Location:    registryTXTLocation(newEp.RecordType, target),
+			Location:    recordLocation(newEp.RecordType, target),
 		}
 
 		logger.DebugContext(ctx, "updating record", "name", newName, "type", newEp.RecordType, "destination", target, "recordID", matched[i].ID)
@@ -470,7 +470,7 @@ func (p *Provider) updateEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 			Description: newEp.SetIdentifier,
 			Destination: target,
 			TTL:         ttl,
-			Location:    registryTXTLocation(newEp.RecordType, target),
+			Location:    recordLocation(newEp.RecordType, target),
 		}
 
 		logger.DebugContext(ctx, "creating extra record during update", "name", newName, "type", newEp.RecordType, "destination", target)
@@ -513,7 +513,7 @@ func (p *Provider) createRecord(ctx context.Context, zones []*gotidydns.ZoneInfo
 			Description: ep.SetIdentifier,
 			Destination: target,
 			TTL:         ttl,
-			Location:    registryTXTLocation(ep.RecordType, target),
+			Location:    recordLocation(ep.RecordType, target),
 		}
 
 		logger.DebugContext(ctx, "creating record", "name", dnsName, "type", ep.RecordType, "destination", target)
