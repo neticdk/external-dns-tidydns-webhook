@@ -18,5 +18,5 @@ permissions:
 jobs:
   test:
     name: Go Continuous Integration
-    uses: neticdk/shared-github-actions/.github/workflows/go-ci.yaml@a896dd9c1eb45e54c30eb3f256e6f269869e98e1 # v0.4.2
+    uses: neticdk/shared-github-actions/.github/workflows/go-ci.yaml@dd6cb4fb8e94da8aa900d82ce377bd64db32f557 # v0.5.0
     secrets: inherit
