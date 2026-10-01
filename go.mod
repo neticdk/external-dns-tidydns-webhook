@@ -6,16 +6,16 @@ require (
 	github.com/neticdk/go-common v0.28.3
 	github.com/neticdk/go-stdlib v1.0.1
 	github.com/neticdk/tidydns-go v1.3.0
-	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_golang v1.24.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel v1.44.0
-	go.opentelemetry.io/otel/metric v1.44.0
-	go.opentelemetry.io/otel/trace v1.44.0
-	golang.org/x/net v0.55.0
-	golang.org/x/sync v0.20.0
-	sigs.k8s.io/external-dns v0.21.0
+	github.com/stretchr/testify v1.12.1
+	go.opentelemetry.io/otel v1.46.0
+	go.opentelemetry.io/otel/metric v1.46.0
+	go.opentelemetry.io/otel/trace v1.46.0
+	golang.org/x/net v0.59.0
+	golang.org/x/sync v0.23.0
+	sigs.k8s.io/external-dns v0.23.0
 )
 
 require (
