@@ -569,6 +569,63 @@ func TestApplyChangesUpdateCreatesExtraNew(t *testing.T) {
 	client.AssertExpectations(t)
 }
 
+func TestApplyChangesUpdateCollapsesApexDuplicates(t *testing.T) {
+	// Duplicate apex records make external-dns send old [ip, ip, ip] and new
+	// [ip]. The update must keep one record and delete the others, not update
+	// and delete the same record.
+	existing := []*tidydns.RecordInfo{
+		{ID: 1, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
+		{ID: 2, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
+		{ID: 3, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
+	}
+
+	client := &mockClient{}
+	client.On("FindRecord", mock.Anything, 1, ".", tidydns.RecordTypeA).Return(existing, nil)
+	client.On("UpdateRecord", mock.Anything, 1, 1, tidydns.RecordInfo{
+		Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1",
+	}).Return(nil).Once()
+	client.On("DeleteRecord", mock.Anything, 1, 2).Return(nil).Once()
+	client.On("DeleteRecord", mock.Anything, 1, 3).Return(nil).Once()
+
+	p := newTestProvider(t, client, []*tidydns.ZoneInfo{{ID: 1, Name: "example.com"}})
+
+	changes := &plan.Changes{
+		UpdateOld: []*endpoint.Endpoint{
+			{DNSName: "example.com", Targets: endpoint.Targets{"1.0.0.1", "1.0.0.1", "1.0.0.1"}, RecordType: "A"},
+		},
+		UpdateNew: []*endpoint.Endpoint{
+			{DNSName: "example.com", Targets: endpoint.Targets{"1.0.0.1"}, RecordType: "A"},
+		},
+	}
+	err := p.ApplyChanges(context.Background(), changes)
+	assert.NoError(t, err)
+	client.AssertExpectations(t)
+	client.AssertNotCalled(t, "CreateRecord", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestApplyChangesDeleteDuplicateTargets(t *testing.T) {
+	existing := []*tidydns.RecordInfo{
+		{ID: 1, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
+		{ID: 2, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
+	}
+
+	client := &mockClient{}
+	client.On("FindRecord", mock.Anything, 1, ".", tidydns.RecordTypeA).Return(existing, nil)
+	client.On("DeleteRecord", mock.Anything, 1, 1).Return(nil).Once()
+	client.On("DeleteRecord", mock.Anything, 1, 2).Return(nil).Once()
+
+	p := newTestProvider(t, client, []*tidydns.ZoneInfo{{ID: 1, Name: "example.com"}})
+
+	changes := &plan.Changes{
+		Delete: []*endpoint.Endpoint{
+			{DNSName: "example.com", Targets: endpoint.Targets{"1.0.0.1", "1.0.0.1"}, RecordType: "A"},
+		},
+	}
+	err := p.ApplyChanges(context.Background(), changes)
+	assert.NoError(t, err)
+	client.AssertExpectations(t)
+}
+
 func TestApplyChangesPhaseOrdering(t *testing.T) {
 	// Verify deletes complete before creates by setting up a scenario where
 	// we delete and create the same record name. If deletes didn't run first
