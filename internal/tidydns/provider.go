@@ -139,8 +139,8 @@ func (p *Provider) GetDomainFilter() endpoint.DomainFilterInterface {
 }
 
 // Records returns all DNS records from TidyDNS as external-dns endpoints.
-// Multiple TidyDNS records with the same name and type are merged into a single
-// endpoint with multiple targets.
+// Multiple TidyDNS records with the same name, type and description (set
+// identifier) are merged into a single endpoint with multiple targets.
 func (p *Provider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 	start := time.Now()
 	ctx, span := p.tracer.Start(ctx, "tidydns.list_records", trace.WithSpanKind(trace.SpanKindClient))
@@ -156,8 +156,9 @@ func (p *Provider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 	}
 
 	type groupKey struct {
-		name  string
-		rType string
+		name          string
+		rType         string
+		setIdentifier string
 	}
 
 	grouped := make(map[groupKey]*endpoint.Endpoint)
@@ -168,7 +169,7 @@ func (p *Provider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 			continue
 		}
 
-		key := groupKey{name: ep.DNSName, rType: ep.RecordType}
+		key := groupKey{name: ep.DNSName, rType: ep.RecordType, setIdentifier: ep.SetIdentifier}
 		if existing, ok := grouped[key]; ok {
 			existing.Targets = append(existing.Targets, ep.Targets...)
 		} else {

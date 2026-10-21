@@ -80,6 +80,32 @@ func TestRecordsMergesTargets(t *testing.T) {
 	assert.ElementsMatch(t, eps[0].Targets, []string{"1.1.1.1", "2.2.2.2"})
 }
 
+func TestRecordsGroupsBySetIdentifier(t *testing.T) {
+	// A manually created record with a description must not be merged into
+	// the external-dns managed record, otherwise the managed endpoint inherits
+	// the description as set identifier and external-dns recreates it forever.
+	records := []*tidydns.RecordInfo{
+		{ID: 1, Type: tidydns.RecordTypeA, Name: ".", Description: "manual", Destination: "1.1.1.1"},
+		{ID: 2, Type: tidydns.RecordTypeA, Name: ".", Destination: "2.2.2.2"},
+	}
+
+	client := &mockClient{}
+	client.On("ListRecords", mock.Anything, 1).Return(records, nil)
+
+	p := newTestProvider(t, client, []*tidydns.ZoneInfo{{ID: 1, Name: "example.com"}})
+
+	eps, err := p.Records(context.Background())
+	assert.NoError(t, err)
+	assert.Len(t, eps, 2)
+
+	bySetID := map[string]*endpoint.Endpoint{}
+	for _, ep := range eps {
+		bySetID[ep.SetIdentifier] = ep
+	}
+	assert.Equal(t, endpoint.Targets{"1.1.1.1"}, bySetID["manual"].Targets)
+	assert.Equal(t, endpoint.Targets{"2.2.2.2"}, bySetID[""].Targets)
+}
+
 func TestApplyChangesCreate(t *testing.T) {
 	client := &mockClient{}
 	client.On("CreateRecord", mock.Anything, 1, tidydns.RecordInfo{
