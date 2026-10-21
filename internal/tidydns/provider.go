@@ -346,17 +346,19 @@ func (p *Provider) deleteEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 		return fmt.Errorf("finding records for delete %s (%s): %w", ep.DNSName, ep.RecordType, err)
 	}
 
+	// Delete each record once, even when the endpoint lists a target twice.
+	targets := make(map[string]bool, len(ep.Targets))
 	for _, target := range ep.Targets {
-		target = tidyfyTarget(target)
-		for _, record := range records {
-			if record.Destination != target {
-				continue
-			}
-			logger.DebugContext(ctx, "deleting record", "name", dnsName, "type", ep.RecordType, "destination", record.Destination)
-			if err := p.deleteRecord(ctx, zoneID, record.ID); err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				return fmt.Errorf("deleting record %s (%s): %w", dnsName, ep.RecordType, err)
-			}
+		targets[tidyfyTarget(target)] = true
+	}
+	for _, record := range records {
+		if !targets[record.Destination] {
+			continue
+		}
+		logger.DebugContext(ctx, "deleting record", "name", dnsName, "type", ep.RecordType, "destination", record.Destination)
+		if err := p.deleteRecord(ctx, zoneID, record.ID); err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			return fmt.Errorf("deleting record %s (%s): %w", dnsName, ep.RecordType, err)
 		}
 	}
 	return nil
@@ -394,12 +396,15 @@ func (p *Provider) updateEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 		return fmt.Errorf("finding records for update %s (%s): %w", oldEp.DNSName, oldEp.RecordType, err)
 	}
 
-	// Match old targets to existing TidyDNS records.
+	// Match old targets to existing TidyDNS records. Each record is matched at
+	// most once, so duplicate targets map to separate duplicate records.
 	var matched []*gotidydns.RecordInfo
+	used := make(map[int]bool)
 	for _, target := range oldEp.Targets {
 		target = tidyfyTarget(target)
 		for _, record := range records {
-			if record.Destination == target {
+			if record.Destination == target && !used[record.ID] {
+				used[record.ID] = true
 				matched = append(matched, record)
 				break
 			}
