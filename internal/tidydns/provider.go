@@ -193,6 +193,7 @@ func (p *Provider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 // - Labels are removed (not supported by TidyDNS)
 // - Unicode names are encoded as punycode
 // - Unsupported record types (e.g. AAAA) are filtered out
+// - Set identifiers are removed (TidyDNS has no routing policies)
 func (p *Provider) AdjustEndpoints(endpoints []*endpoint.Endpoint) ([]*endpoint.Endpoint, error) {
 	adjusted := make([]*endpoint.Endpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
@@ -202,6 +203,7 @@ func (p *Provider) AdjustEndpoints(endpoints []*endpoint.Endpoint) ([]*endpoint.
 		}
 		ep.RecordTTL = endpoint.TTL(clampTTL(int(ep.RecordTTL)))
 		ep.Labels = endpoint.Labels{}
+		ep.SetIdentifier = ""
 		ep.DNSName, _ = idna.Lookup.ToASCII(ep.DNSName)
 		adjusted = append(adjusted, ep)
 	}
@@ -440,7 +442,7 @@ func (p *Provider) updateEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 		info := gotidydns.RecordInfo{
 			Type:        newRecordType,
 			Name:        newName,
-			Description: newEp.SetIdentifier,
+			Description: matched[i].Description,
 			Destination: target,
 			TTL:         ttl,
 			Location:    recordLocation(newEp.RecordType, target),
@@ -472,7 +474,6 @@ func (p *Provider) updateEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 		info := gotidydns.RecordInfo{
 			Type:        newRecordType,
 			Name:        newName,
-			Description: newEp.SetIdentifier,
 			Destination: target,
 			TTL:         ttl,
 			Location:    recordLocation(newEp.RecordType, target),
@@ -515,7 +516,6 @@ func (p *Provider) createRecord(ctx context.Context, zones []*gotidydns.ZoneInfo
 		info := gotidydns.RecordInfo{
 			Type:        recordType,
 			Name:        dnsName,
-			Description: ep.SetIdentifier,
 			Destination: target,
 			TTL:         ttl,
 			Location:    recordLocation(ep.RecordType, target),
@@ -545,9 +545,10 @@ func parseTidyRecord(record *zoneRecord) *endpoint.Endpoint {
 		destination = strings.TrimRight(destination, ".")
 	}
 
-	ep := endpoint.NewEndpointWithTTL(dnsName, recordType, ttl, destination)
-	ep.SetIdentifier = record.Description
-	return ep
+	// The description is free text for people. Using it as the set identifier
+	// would make external-dns treat a described record as a separate,
+	// unowned endpoint and recreate its own record on every reconcile.
+	return endpoint.NewEndpointWithTTL(dnsName, recordType, ttl, destination)
 }
 
 // findRecords wraps client.FindRecord with a child span.

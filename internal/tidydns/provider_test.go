@@ -80,6 +80,27 @@ func TestRecordsMergesTargets(t *testing.T) {
 	assert.ElementsMatch(t, eps[0].Targets, []string{"1.1.1.1", "2.2.2.2"})
 }
 
+func TestRecordsIgnoresDescription(t *testing.T) {
+	// A record with a description must merge into the same endpoint as the
+	// others. If the description became the set identifier, external-dns would
+	// see its own record as missing and create it again on every reconcile.
+	records := []*tidydns.RecordInfo{
+		{ID: 1, Type: tidydns.RecordTypeA, Name: ".", Description: "manual", Destination: "1.1.1.1"},
+		{ID: 2, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.1.1.1"},
+	}
+
+	client := &mockClient{}
+	client.On("ListRecords", mock.Anything, 1).Return(records, nil)
+
+	p := newTestProvider(t, client, []*tidydns.ZoneInfo{{ID: 1, Name: "example.com"}})
+
+	eps, err := p.Records(context.Background())
+	assert.NoError(t, err)
+	assert.Len(t, eps, 1)
+	assert.Empty(t, eps[0].SetIdentifier)
+	assert.Equal(t, endpoint.Targets{"1.1.1.1", "1.1.1.1"}, eps[0].Targets)
+}
+
 func TestApplyChangesCreate(t *testing.T) {
 	client := &mockClient{}
 	client.On("CreateRecord", mock.Anything, 1, tidydns.RecordInfo{
@@ -223,7 +244,7 @@ func TestAdjustEndpoints(t *testing.T) {
 	p := newTestProvider(t, client, testZones)
 
 	endpoints := []*endpoint.Endpoint{
-		{DNSName: "test.example.com", RecordType: "A", RecordTTL: 60},
+		{DNSName: "test.example.com", RecordType: "A", RecordTTL: 60, SetIdentifier: "blue"},
 		{DNSName: "test.example.com", RecordType: "AAAA", RecordTTL: 300},
 		{DNSName: "test.example.com", RecordType: "CNAME", RecordTTL: 0},
 		{DNSName: "münchen.example.com", RecordType: "A", RecordTTL: 300},
@@ -241,6 +262,8 @@ func TestAdjustEndpoints(t *testing.T) {
 	assert.Equal(t, adjusted[2].DNSName, "xn--mnchen-3ya.example.com")
 	// Labels cleared
 	assert.Empty(t, adjusted[0].Labels)
+	// Set identifier cleared
+	assert.Empty(t, adjusted[0].SetIdentifier)
 }
 
 func TestParseTidyRecord(t *testing.T) {
@@ -572,9 +595,9 @@ func TestApplyChangesUpdateCreatesExtraNew(t *testing.T) {
 func TestApplyChangesUpdateCollapsesApexDuplicates(t *testing.T) {
 	// Duplicate apex records make external-dns send old [ip, ip, ip] and new
 	// [ip]. The update must keep one record and delete the others, not update
-	// and delete the same record.
+	// and delete the same record. The kept record keeps its description.
 	existing := []*tidydns.RecordInfo{
-		{ID: 1, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
+		{ID: 1, Type: tidydns.RecordTypeA, Name: ".", Description: "manual", Destination: "1.0.0.1"},
 		{ID: 2, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
 		{ID: 3, Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1"},
 	}
@@ -582,7 +605,7 @@ func TestApplyChangesUpdateCollapsesApexDuplicates(t *testing.T) {
 	client := &mockClient{}
 	client.On("FindRecord", mock.Anything, 1, ".", tidydns.RecordTypeA).Return(existing, nil)
 	client.On("UpdateRecord", mock.Anything, 1, 1, tidydns.RecordInfo{
-		Type: tidydns.RecordTypeA, Name: ".", Destination: "1.0.0.1",
+		Type: tidydns.RecordTypeA, Name: ".", Description: "manual", Destination: "1.0.0.1",
 	}).Return(nil).Once()
 	client.On("DeleteRecord", mock.Anything, 1, 2).Return(nil).Once()
 	client.On("DeleteRecord", mock.Anything, 1, 3).Return(nil).Once()
