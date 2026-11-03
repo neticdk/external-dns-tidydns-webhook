@@ -1,10 +1,15 @@
 package tidydns
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 
+	"github.com/neticdk/go-common/pkg/log"
 	"github.com/neticdk/go-stdlib/assert"
 	"github.com/neticdk/tidydns-go/pkg/tidydns"
 	"github.com/stretchr/testify/mock"
@@ -702,4 +707,35 @@ func TestRecordLocation(t *testing.T) {
 			assert.Equal(t, int(recordLocation(tt.recordType, tt.target)), tt.want)
 		})
 	}
+}
+
+// A name outside every zone the account sees is skipped, and the skip is logged at warn level, because external-dns
+// reports the change as applied and retries it on every sync without logging anything itself.
+func TestApplyChangesCreateNoMatchingZoneWarns(t *testing.T) {
+	client := &mockClient{}
+	p := newTestProvider(t, client, []*tidydns.ZoneInfo{{ID: 1, Name: "example.com"}})
+
+	var buf bytes.Buffer
+	ctx := log.WithLogger(context.Background(), slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	changes := &plan.Changes{
+		Create: []*endpoint.Endpoint{
+			{DNSName: "new.unknown.org", Targets: endpoint.Targets{"1.1.1.1"}, RecordType: "A"},
+		},
+	}
+	err := p.ApplyChanges(ctx, changes)
+	assert.NoError(t, err)
+	client.AssertNotCalled(t, "CreateRecord", mock.Anything, mock.Anything, mock.Anything)
+
+	var warned bool
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var rec map[string]any
+		if json.Unmarshal([]byte(line), &rec) != nil {
+			continue
+		}
+		if rec["level"] == "WARN" && rec["name"] == "new.unknown.org" {
+			warned = true
+		}
+	}
+	assert.True(t, warned, "expected a warning for the skipped name, got: %s", buf.String())
 }
