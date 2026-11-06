@@ -13,5 +13,5 @@ permissions:
 jobs:
   release:
     name: Go Continuous Delivery
-    uses: neticdk/shared-github-actions/.github/workflows/go-cd.yaml@0f94f62339cec974c8d6febed7b49165d62d0719 # v0.9.0
+    uses: neticdk/shared-github-actions/.github/workflows/go-cd.yaml@97e6b6e38dc290e4b2ca8982fb7c496db6584c3d # v0.9.1
     secrets: inherit
