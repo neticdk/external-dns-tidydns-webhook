@@ -6,9 +6,13 @@ on:
     tags:
       - v*
 
+# id-token and attestations let go-cd.yaml in neticdk/shared-github-actions
+# sign build provenance. Only its provenance jobs receive them.
 permissions:
   contents: write
   packages: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
