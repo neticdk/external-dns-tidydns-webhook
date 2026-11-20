@@ -338,7 +338,7 @@ func (p *Provider) deleteEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 
 	dnsName, zoneID := tidyfyName(zones, ep.DNSName)
 	if dnsName == "" {
-		logger.DebugContext(ctx, "skipping delete, no matching zone", "name", ep.DNSName)
+		logger.WarnContext(ctx, "skipping delete, no TidyDNS zone visible to this account matches the name", "name", ep.DNSName)
 		return nil
 	}
 
@@ -388,7 +388,7 @@ func (p *Provider) updateEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 
 	oldName, oldZoneID := tidyfyName(zones, oldEp.DNSName)
 	if oldName == "" {
-		logger.DebugContext(ctx, "skipping update, no matching zone for old endpoint", "name", oldEp.DNSName)
+		logger.WarnContext(ctx, "skipping update, no TidyDNS zone visible to this account matches the old name", "name", oldEp.DNSName)
 		return nil
 	}
 
@@ -415,7 +415,7 @@ func (p *Provider) updateEndpoint(ctx context.Context, zones []*gotidydns.ZoneIn
 
 	newName, newZoneID := tidyfyName(zones, newEp.DNSName)
 	if newName == "" {
-		logger.DebugContext(ctx, "skipping update, no matching zone for new endpoint", "name", newEp.DNSName)
+		logger.WarnContext(ctx, "skipping update, no TidyDNS zone visible to this account matches the new name", "name", newEp.DNSName)
 		return nil
 	}
 
@@ -500,7 +500,7 @@ func (p *Provider) createRecord(ctx context.Context, zones []*gotidydns.ZoneInfo
 
 	dnsName, zoneID := tidyfyName(zones, ep.DNSName)
 	if dnsName == "" {
-		logger.DebugContext(ctx, "skipping create, no matching zone", "name", ep.DNSName)
+		logger.WarnContext(ctx, "skipping create, no TidyDNS zone visible to this account matches the name", "name", ep.DNSName)
 		return nil
 	}
 
