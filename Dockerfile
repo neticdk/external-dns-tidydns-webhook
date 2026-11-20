@@ -1,4 +1,4 @@
-FROM alpine:3.23@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS setup
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS setup
 
 RUN apk add --no-cache ca-certificates \
   && addgroup -S -g 65532 nonroot \
